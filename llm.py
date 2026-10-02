@@ -20,14 +20,34 @@ DEFAULT_BASE = "https://api.deepseek.com"
 DEFAULT_MODEL = "deepseek-chat"
 TIMEOUT = 180
 
+# 上一次调用，对面回的完整那一份（usage 就在里面）。hub 拿它算 token。
+LAST_RAW = {}
+# 这一轮一共烧了多少（多轮工具调用会累加）。说话之前记得 reset_usage()。
+USAGE_TOTAL = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 0,
+}
+
+
+def reset_usage():
+    """说一句话之前，把计数器归零。"""
+    LAST_RAW.clear()
+    for k in USAGE_TOTAL:
+        USAGE_TOTAL[k] = 0
+
 # reasoner 这类"会先想一遍"的模型，不吃 function calling，别给它塞工具
 NO_TOOLS_HINT = ("reasoner", "r1", "think")
 
 # 想加新家，就在这里多写一行。hub 只认 base + model 两个字段。
 PROVIDERS = [
+    # 注意：deepseek-chat / deepseek-reasoner 这两个老名字 2026-07-24 就废了。
+    # 现在是 deepseek-flash（= V4.1-Flash，自带视觉、1M 上下文、能思考）
+    # 和 deepseek-v4-pro（在往下线，请求会路由到 Flash）。写死的旧名字要改。
     {"id": "deepseek", "name": "深度求索 DeepSeek",
      "base": "https://api.deepseek.com",
-     "models": ["deepseek-chat", "deepseek-reasoner"]},
+     "models": ["deepseek-flash", "deepseek-v4-pro"]},
     {"id": "moonshot", "name": "月之暗面 Kimi",
      "base": "https://api.moonshot.cn/v1",
      "models": ["moonshot-v1-8k", "moonshot-v1-32k"]},
@@ -89,9 +109,23 @@ def chat(messages, api_key, model=None, base=None, tools=None, timeout=TIMEOUT):
 
     try:
         d = json.loads(raw)
-        return d["choices"][0]["message"]
     except Exception:
         raise LLMError("对面回的看不懂：" + raw[:200]) from None
+
+    # 这一次烧了多少，记下来 —— hub 那边要拿它算 token
+    LAST_RAW.clear()
+    LAST_RAW.update(d)
+    u = d.get("usage") or {}
+    for k in USAGE_TOTAL:
+        try:
+            USAGE_TOTAL[k] += int(u.get(k) or 0)
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return d["choices"][0]["message"]
+    except Exception:
+        raise LLMError("对面回了，但没有 choices：" + raw[:200]) from None
 
 
 def balance(api_key, base=None, timeout=30):

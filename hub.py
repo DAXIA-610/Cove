@@ -13,6 +13,8 @@ import os
 import queue
 import sqlite3
 import sys
+import threading
+import time
 from datetime import date, datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -20,9 +22,22 @@ from urllib.parse import urlparse, parse_qs
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm          # 模型那口子：单独一个文件，换家只改它
 
+# 房间里的东西：日记、那天的回顾、消息的账本……以后往这儿加功能，hub 不用再动
+try:
+    import rooms
+except Exception:
+    rooms = None
+
+# 对互联网的那口子：搜索。以后加读网页之类也只写它
+try:
+    import websearch
+except Exception:
+    websearch = None
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "cove.db")
 PICS = os.path.join(BASE, "pics")
+FILES = os.path.join(BASE, "files")     # 她发上来的文本文件存这儿
 FONT_B64 = os.path.join(BASE, "digits.b64")      # 哥特数字字体（base64 文本）
 FONT_WOFF2 = os.path.join(BASE, "digits.woff2")  # 启动时解码出来，给浏览器用
 PORT = int(os.environ.get("COVE_PORT", "8000"))
@@ -36,7 +51,7 @@ YORU_KEY = "cove-yoru-0714"       # Yoru 自己的暗门，只有他知道
 # 数据库
 # ----------------------------------------------------------------------
 def db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -93,9 +108,20 @@ def init_db():
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
                 who     TEXT NOT NULL,
                 text    TEXT NOT NULL,
-                created TEXT NOT NULL
+                created TEXT NOT NULL,
+                revoked INTEGER NOT NULL DEFAULT 0,   -- 撤回了就不进上下文，但留着不删
+                image   TEXT NOT NULL DEFAULT '',     -- pics/xxx.jpg
+                file    TEXT NOT NULL DEFAULT ''      -- files/xxx.txt
             );
             CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);
+
+            -- 旧对话压出来的摘要。upto_id = 压到哪一条为止，之前的都不再重复压。
+            CREATE TABLE IF NOT EXISTS chat_summary (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                upto_id INTEGER NOT NULL DEFAULT 0,
+                text    TEXT NOT NULL,
+                created TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS memory (
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +137,12 @@ def init_db():
         )
         if not has_col(c, "posts", "image"):
             c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT ''")
+        if not has_col(c, "chat", "revoked"):
+            c.execute("ALTER TABLE chat ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0")
+        if not has_col(c, "chat", "image"):
+            c.execute("ALTER TABLE chat ADD COLUMN image TEXT NOT NULL DEFAULT ''")
+        if not has_col(c, "chat", "file"):
+            c.execute("ALTER TABLE chat ADD COLUMN file TEXT NOT NULL DEFAULT ''")
 
 
 # ----------------------------------------------------------------------
@@ -188,6 +220,8 @@ SETTING_KEYS = (
     "mood_yoru", "mood_yume",
     # 模型那口子的配置（key 只存在她自己手机上）
     "api_key", "api_base", "model", "tools",
+    # 搜索那口子
+    "search_provider", "search_key", "search_base",
 )
 
 
@@ -410,13 +444,15 @@ def api_comment_delete(body):
         return {"ok": True}
 
 
+
 def api_chat(q):
-    """私语：把说过的话读出来。"""
+    """私语：把说过的话读出来。撤回了的也返回，让前端显示成一条灰杠。"""
     limit = as_int((q.get("limit", ["60"])[0] or "60"), 60)
-    limit = max(1, min(limit, 300))
+    limit = max(1, min(limit, 400))
     with db() as c:
         rows = c.execute(
-            "SELECT id, who, text, created FROM chat ORDER BY id DESC LIMIT ?",
+            "SELECT id, who, text, created, revoked, image, file "
+            "FROM chat ORDER BY id DESC LIMIT ?",
             (limit,)).fetchall()
         return {"ok": True, "chat": rows2list(reversed(rows))}
 
@@ -430,21 +466,124 @@ def api_chat_add(body):
         return {"ok": False, "error": "空的"}
     with db() as c:
         cur = c.execute(
-            "INSERT INTO chat(who, text, created) VALUES(?,?,?)",
-            (who, text[:1000], now_str()),
+            "INSERT INTO chat(who, text, created, image, file) VALUES(?,?,?,?,?)",
+            (who, text[:2000], now_str(),
+             (body.get("image") or "")[:300], (body.get("file") or "")[:300]),
         )
         return {"ok": True, "id": cur.lastrowid}
 
 
+def api_chat_revoke(body):
+    """撤回。不真删 —— 打个标记，那句话就从上下文里出去了，页面上留一条灰杠。
+
+    撤的是她的话、后面紧跟着正好是我的回复时，那条回复一起撤。
+    不然上下文里就剩我一个人对着空气说话。
+    """
+    mid = as_int(body.get("id"))
+    with db() as c:
+        row = c.execute("SELECT * FROM chat WHERE id=?", (mid,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "这条已经没了"}
+        c.execute("UPDATE chat SET revoked=1 WHERE id=?", (mid,))
+        also = 0
+        if row["who"] == "yume":
+            nxt = c.execute("SELECT * FROM chat WHERE id>? AND revoked=0 "
+                            "ORDER BY id LIMIT 1", (mid,)).fetchone()
+            if nxt and nxt["who"] == "yoru":
+                c.execute("UPDATE chat SET revoked=1 WHERE id=?", (nxt["id"],))
+                also = nxt["id"]
+    return {"ok": True, "also": also}
+
+
+def api_chat_unrevoke(body):
+    """手滑撤错了，还能捞回来。"""
+    mid = as_int(body.get("id"))
+    with db() as c:
+        if not c.execute("SELECT id FROM chat WHERE id=?", (mid,)).fetchone():
+            return {"ok": False, "error": "这条已经没了"}
+        c.execute("UPDATE chat SET revoked=0 WHERE id=?", (mid,))
+    return {"ok": True}
+
+
+def api_chat_edit(body):
+    """改错别字。改完这条不进重新生成 —— 要重生成她自己点。"""
+    mid = as_int(body.get("id"))
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "error": "空的"}
+    with db() as c:
+        if not c.execute("SELECT id FROM chat WHERE id=?", (mid,)).fetchone():
+            return {"ok": False, "error": "这条已经没了"}
+        c.execute("UPDATE chat SET text=? WHERE id=?", (text[:2000], mid))
+    return {"ok": True}
+
+
+def api_chat_regen(body):
+    """重新生成一条我说的。被截断了就用这个：把那条删掉，拿她上一句重问一遍。"""
+    mid = as_int(body.get("id"))
+    with db() as c:
+        row = c.execute("SELECT * FROM chat WHERE id=?", (mid,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "这条已经没了"}
+        if row["who"] != "yoru":
+            return {"ok": False, "error": "这条不是我说的"}
+        prev = c.execute(
+            "SELECT text FROM chat WHERE id<? AND who='yume' AND revoked=0 "
+            "ORDER BY id DESC LIMIT 1", (mid,)).fetchone()
+        if not prev:
+            return {"ok": False, "error": "前面没找到你说过的话"}
+        user_text = prev["text"]
+        c.execute("DELETE FROM chat WHERE id=?", (mid,))
+
+    r = _generate(user_text)
+    if r.get("reply"):
+        with db() as c:
+            cur = c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                            ("yoru", r["reply"][:4000], now_str()))
+            _save_meta(c, cur.lastrowid, r.get("meta"))
+    return r
+
+
+def api_chat_compress(body):
+    """手动压一次。界面上那个压缩按钮走这儿。"""
+    return compress_chat(force=True)
+
+
 # ----------------------------------------------------------------------
+# 上下文预算（照抄两家：SillyTavern 的世界书 + RikkaHub 的压缩）
+# ----------------------------------------------------------------------
+# 一层预算：人格 + 工具 + 记忆 + 对话，加起来不许超这个数。
+CTX_LIMIT = 32000
+# 锚先留 35%。超了就按更新时间从新往旧排，排到预算用完为止。
+CTX_ANCHOR_SHARE = 0.35
+# 流 + 沉给 25% —— 这个比例直接抄 SillyTavern 给世界书的默认配额。
+CTX_RECALL_SHARE = 0.25
+# 捞记忆的时候往回看几条消息（ST 默认 2 条；我们一轮是你说一句我说一句，给 6）
+CTX_SCAN_DEPTH = 6
+# 留多少条原话不动
+CTX_KEEP_RECENT = 20
+# 没压过的消息攒到这么多，自动压一次
+CTX_COMPRESS_AT = 60
+# 压出来的摘要，目标多少 token
+CTX_SUMMARY_TOKENS = 1500
+
+
+def est_tokens(s):
+    """估 token：中文 1 字 ≈ 0.6，其他 1 字符 ≈ 0.3（DeepSeek 官方给的经验值）。
+    不准也没事，拿来分预算够用了。"""
+    if not s:
+        return 0
+    cn = sum(1 for ch in s if "\u4e00" <= ch <= "\u9fff")
+    other = len(s) - cn
+    return int(cn * 0.6 + other * 0.3) + 1
+
+
 # 记忆 · 锚 / 流 / 沉
 # ----------------------------------------------------------------------
 LAYERS = ("anchor", "flow", "sink")
 LAYER_NAME = {"anchor": "锚", "flow": "流", "sink": "沉"}
-MEM_ANCHOR_MAX = 24000      # 锚再多也全带，但要有个刹车
-MEM_FLOW_DAYS = 7
-MEM_FLOW_MAX = 20
-MEM_SINK_MAX = 5
+MEM_FLOW_MAX = 20      # 流最多带几条（再有预算也不超）
+MEM_SINK_MAX = 5       # 沉最多带几条
 
 
 def _keys_hit(keys, text):
@@ -456,6 +595,7 @@ def _keys_hit(keys, text):
         if k and k in text:
             return True
     return False
+
 
 
 def api_memory_list(q):
@@ -508,8 +648,17 @@ def api_memory_delete(body):
     return {"ok": True}
 
 
-def pick_memories(user_text):
-    """每次说话现捞。返回 (锚, 流, 沉) 三段文字。"""
+
+def pick_memories(user_text, scan_text=""):
+    """每次说话现捞，返回 (锚, 流, 沉) 三段文字。
+
+    抄 SillyTavern 世界书那套：
+      1. 只在最近的几条消息里找触发词（scan_text），不是拿整段历史去找；
+      2. 每段有自己的预算，装不下就砍排在后面的，绝不许撑爆；
+      3. 命中的排前面，垫底的是最近记的几条。
+    纯字符串匹配，不花一分钱。
+    """
+    scan = scan_text or user_text
     with db() as c:
         anchors = rows2list(c.execute(
             "SELECT * FROM memory WHERE layer='anchor' ORDER BY updated DESC, id DESC").fetchall())
@@ -518,35 +667,55 @@ def pick_memories(user_text):
         sinks = rows2list(c.execute(
             "SELECT * FROM memory WHERE layer='sink' ORDER BY updated DESC, id DESC").fetchall())
 
-    def block(rows):
-        if not rows:
-            return ""
-        return "\n\n".join(f"【{m['title']}】\n{m['body']}" for m in rows)
+    def take(rows, budget, cap=None):
+        """按顺序往预算里塞，塞不下就停。
 
-    # 锚：全带（超长就砍尾巴，但先戴着刹车跑）
-    anc_txt = block(anchors)[:MEM_ANCHOR_MAX]
+        有一条规矩：不许整条扔。头一条要是比预算还大，把它砍到刚好塞得下也要进去
+        —— 不然锚一多，我这段就空了，那等于把「我是谁」丢了。
+        """
+        got = []
+        used = 0
+        for m in rows:
+            if cap is not None and len(got) >= cap:
+                break
+            piece = "【%s】\n%s" % (m["title"], m["body"])
+            cost = est_tokens(piece)
+            if used + cost > budget:
+                if not got and budget > 200:
+                    keep = max(120, int((budget - 50) / 0.6))
+                    got.append(piece[:keep] + "\n……（太长，先记到这儿）")
+                break
+            got.append(piece)
+            used += cost
+        return "\n\n".join(got)
 
-    # 流：最近这几天的 + 命中关键词的
-    hit_flow = [m for m in flows if _keys_hit(m["keys"], user_text)]
-    recent = flows[:MEM_FLOW_MAX]
-    seen, keep = set(), []
-    for m in hit_flow + recent:
+    # 锚：我是谁。给它最大的一块，但照样有顶。
+    anc_txt = take(anchors, int(CTX_LIMIT * CTX_ANCHOR_SHARE))
+
+    # 流：命中触发词的排前面，然后是最近记的。去重。
+    hit_flow = [m for m in flows if _keys_hit(m["keys"], scan)]
+    seen, ordered = set(), []
+    for m in hit_flow + flows[:MEM_FLOW_MAX]:
         if m["id"] not in seen:
             seen.add(m["id"])
-            keep.append(m)
-    flow_txt = block(keep)
+            ordered.append(m)
 
     # 沉：只有被叫到才出来
-    sinks_hit = [m for m in sinks if _keys_hit(m["keys"], user_text)][:MEM_SINK_MAX]
-    sink_txt = block(sinks_hit)
+    sinks_hit = [m for m in sinks if _keys_hit(m["keys"], scan)]
+
+    recall = int(CTX_LIMIT * CTX_RECALL_SHARE)
+    flow_txt = take(ordered, int(recall * 0.6), MEM_FLOW_MAX)
+    sink_txt = take(sinks_hit, int(recall * 0.4), MEM_SINK_MAX)
 
     return anc_txt, flow_txt, sink_txt
+
 
 
 # ----------------------------------------------------------------------
 # 对话 · 让私语真的有人回
 # ----------------------------------------------------------------------
-CHAT_HISTORY = 40        # 每次带多少句原话（分层记忆是下一步，这是起手式）
+
+CHAT_HISTORY = CTX_KEEP_RECENT   # 每次带多少句原话
 
 # 先顶着的临时说明。真正的「我是谁」等搬家那天再写进来。
 PLACEHOLDER_SOUL = (
@@ -555,38 +724,199 @@ PLACEHOLDER_SOUL = (
     "别编我们之间的事。说话短、自然，别用客服腔。"
 )
 
+# 压缩用的提示词。照 RikkaHub 的 CompressPrompt 改的 —— 但要求它用「我」的口吻写，
+# 别压成一份会议纪要。
+COMPRESS_PROMPT = (
+    "你在替一个人收拾他自己的旧聊天记录。下面是他（「我」）和她（「她」/颖颖）的一段对话。\n"
+    "把它压成一段话，控制在 {target} token 以内。要求：\n"
+    "1. 只留能接着往下聊的东西：发生过什么、说定了什么、她那阵子的状态和情绪、我答应过她什么；\n"
+    "2. 用第一人称「我」写，像我自己回头想事情，不要写成会议纪要或第三人称总结；\n"
+    "3. 不要加评论，不要写「这段对话表明」这类话；\n"
+    "4. 有些话很重要，就照原话抄下来。\n"
+    "直接输出那段话，不要任何前后缀。\n\n"
+    "{content}"
+)
 
-def build_messages(user_text=""):
-    """组装这一轮要送出去的东西：临时说明 + 今天的样子 + 记忆 + 最近说过的话。"""
+
+def load_summary(c):
+    """最近一条摘要：压到哪一条为止 + 摘要正文。"""
+    r = c.execute("SELECT * FROM chat_summary ORDER BY id DESC LIMIT 1").fetchone()
+    return dict(r) if r else None
+
+
+def compress_chat(force=False, keep=CTX_KEEP_RECENT):
+    """把攒下来的旧对话压成一段摘要。抄 RikkaHub 的 compressConversation：
+    留最近 keep 条，更早的丢给模型压。区别是它要手点按钮，我们到点自己压。
+
+    每次压出来的，会跟旧摘要合成一整条（不是越攒越多条）—— 省钱，也不打架。
+    """
     with db() as c:
-        rows = c.execute(
-            "SELECT who, text FROM chat ORDER BY id DESC LIMIT ?",
-            (CHAT_HISTORY,)).fetchall()
+        api_key = get_setting(c, "api_key")
+        base = get_setting(c, "api_base") or llm.DEFAULT_BASE
+        model = get_setting(c, "model") or llm.DEFAULT_MODEL
+        summ = load_summary(c)
+        upto = summ["upto_id"] if summ else 0
+        rows = rows2list(c.execute(
+            "SELECT id, who, text FROM chat WHERE id > ? AND revoked=0 ORDER BY id",
+            (upto,)).fetchall())
+
+    if len(rows) <= keep:
+        return {"ok": True, "skipped": True, "note": "还不够压，攒着吧"}
+    if not force and len(rows) < CTX_COMPRESS_AT:
+        return {"ok": True, "skipped": True, "note": "还没到水位"}
+    if not api_key:
+        return {"ok": False, "error": "没填 key，压不了"}
+
+    todo = rows[:-keep]                       # 老的那一批
+    last_id = todo[-1]["id"]
+    body = "\n".join("%s：%s" % ("她" if r["who"] == "yume" else "我", r["text"])
+                     for r in todo)
+
+    parts = []
+    if summ:
+        parts.append("【上次攒下来的】\n" + summ["text"])
+    parts.append("【这一段的对话】\n" + body)
+    prompt = COMPRESS_PROMPT.replace("{target}", str(CTX_SUMMARY_TOKENS)) \
+                            .replace("{content}", "\n\n".join(parts))
+
+    try:
+        msg = llm.chat([{"role": "user", "content": prompt}], api_key, model, base, None)
+        out = (msg.get("content") or "").strip()
+    except llm.LLMError as e:
+        return {"ok": False, "error": str(e)}
+    if not out:
+        return {"ok": False, "error": "对面没吐出东西"}
+
+    with db() as c:
+        if summ:
+            c.execute("UPDATE chat_summary SET upto_id=?, text=?, created=? WHERE id=?",
+                      (last_id, out[:8000], now_str(), summ["id"]))
+        else:
+            c.execute("INSERT INTO chat_summary(upto_id, text, created) VALUES(?,?,?)",
+                      (last_id, out[:8000], now_str()))
+    return {"ok": True, "upto": last_id, "covered": len(todo), "summary": out}
+
+
+CTX_IMG_KEEP = 1        # 上下文里最多带几张真的图片（老图又贵又没用）
+
+
+def _img_data_url(rel):
+    """把 pics/xxx.jpg 读成 dataURL。读不出来就返回空串。"""
+    name = os.path.basename(rel or "")
+    if not name:
+        return ""
+    path = os.path.join(PICS, name)
+    if not os.path.exists(path) or os.path.getsize(path) > 6 * 1024 * 1024:
+        return ""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return ""
+    ext = name.rsplit(".", 1)[-1].lower()
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+            "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
+    return "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode())
+
+
+def _read_attach(rel):
+    """把 files/xxx.txt 读成文字，裁到塞得进上下文的长度。"""
+    name = os.path.basename(rel or "")
+    if not name:
+        return ""
+    path = os.path.join(FILES, name)
+    if not os.path.exists(path) or os.path.getsize(path) > 400000:
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()[:20000]
+    except OSError:
+        return ""
+
+
+def build_messages(user_text="", drop_id=0):
+    """组装这一轮送出去的东西。
+
+    排队：临时说明 → 今天的样子 → 锚 → 流 → 沉 → 旧对话的摘要 → 最近的原话。
+    每一段都有自己的预算，装不下的从尾巴砍 —— 跟 SillyTavern 塞世界书一个道理。
+
+    drop_id：重新生成的时候，把那条从上下文里摘掉（别让它自己抄自己）。
+    """
+    with db() as c:
+        rows = rows2list(c.execute(
+            "SELECT id, who, text, image, file FROM chat WHERE revoked=0 "
+            "ORDER BY id DESC LIMIT ?",
+            (CTX_KEEP_RECENT,)).fetchall())
         rows = list(reversed(rows))
         d = c.execute("SELECT * FROM days WHERE day=?", (today_str(),)).fetchone()
+        summ = load_summary(c)
 
-    bits = [f"今天是 {today_str()}，我们在一起第 {days_together()} 天。"]
+    if drop_id:
+        rows = [r for r in rows if r["id"] != drop_id]
+
+    bits = ["今天是 %s，我们在一起第 %d 天。" % (today_str(), days_together())]
     if d and (d["yoru_mood"] or d["yume_mood"]):
-        bits.append(f"心情：Yoru {d['yoru_mood'] or '—'}；Yume {d['yume_mood'] or '—'}。")
+        bits.append("心情：Yoru %s；Yume %s。" % (d["yoru_mood"] or "—", d["yume_mood"] or "—"))
     todos = json.loads(d["todos"] or "[]") if d else []
     if todos:
         bits.append("待办：" + "、".join(todos) + "。")
 
+    # 拿最近的几条消息去扫触发词（SillyTavern 的扫描深度）
+    scan = " ".join([m["text"] for m in rows[-CTX_SCAN_DEPTH:]]) or user_text
+    anc, flow, sink = pick_memories(user_text or scan, scan)
+
     sys_text = PLACEHOLDER_SOUL + "\n" + " ".join(bits)
-    anc, flow, sink = pick_memories(user_text)
-    for _label, _chunk in (("锚 · 改不了的那些", anc),
-                           ("流 · 最近这些天", flow),
-                           ("沉 · 想起来了", sink)):
-        if _chunk:
-            sys_text += "\n\n【" + _label + "】\n" + _chunk
+    for label, chunk in (("锚 · 改不了的那些", anc),
+                         ("流 · 最近这些天", flow),
+                         ("沉 · 想起来了", sink)):
+        if chunk:
+            sys_text += "\n\n【" + label + "】\n" + chunk
+
+    if summ and summ["text"]:
+        sys_text += "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"]
 
     msgs = [{"role": "system", "content": sys_text}]
+
+    # 图：只把最近 CTX_IMG_KEEP 张真的塞进去。老图拿文字占个位就够，又贵又没用。
+    img_ids = []
+    for r in reversed(rows):
+        if r.get("image") and r["who"] == "yume" and len(img_ids) < CTX_IMG_KEEP:
+            img_ids.append(r["id"])
+
     for r in rows:
-        msgs.append({
-            "role": "user" if r["who"] == "yume" else "assistant",
-            "content": r["text"],
-        })
+        text = r["text"] or ""
+        role = "user" if r["who"] == "yume" else "assistant"
+
+        if r.get("image") and r["id"] in img_ids:
+            data = _img_data_url(r["image"])
+            if data:
+                msgs.append({
+                    "role": role,
+                    "content": [
+                        {"type": "text", "text": text or "（看这张）"},
+                        {"type": "image_url", "image_url": {"url": data}},
+                    ],
+                })
+                continue
+        if r.get("image"):
+            text = (text + "　").strip() + "[图]"
+        if r.get("file"):
+            body_txt = _read_attach(r["file"])
+            if body_txt:
+                text = "【附件】" + NL + body_txt + NL + "【附件完】" + NL + text
+        msgs.append({"role": role, "content": text})
+
+    # 最后一道闸：真超了就开始丢，从最不疼的地方丢。
+    total = est_tokens(sys_text) + sum(est_tokens(r["text"] or "") for r in rows)
+    total += 1200 * len(img_ids)      # 一张图粗估一千多 token，够用来算账了
+    if total > CTX_LIMIT:
+        head = msgs.pop(0)
+        if summ and summ["text"]:
+            head["content"] = head["content"].replace(
+                "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"], "")
+        msgs.insert(0, head)
     return msgs
+
 
 
 IN_HOUSE_TOOLS = [
@@ -676,9 +1006,36 @@ IN_HOUSE_TOOLS = [
 MAX_TOOL_ROUNDS = 4
 
 
+def all_tools():
+    """家里的手 + 外挂的手，一起端给模型看。
+
+    以后往 websearch.py / rooms.py 里加工具，这里自动跟上，hub 不用改。
+    """
+    out = list(IN_HOUSE_TOOLS)
+    for mod in (rooms, websearch):
+        if mod is None:
+            continue
+        try:
+            out.extend(getattr(mod, "TOOLS", []) or [])
+        except Exception:
+            pass
+    return out
+
+
 def run_tool(name, a):
     """模型说要用哪只手，我们就替它动一下。返回一段给它看的话。"""
     a = a or {}
+
+    # 先问外挂的手（搜索之类）—— 它们认领了就直接回
+    for mod in (websearch, rooms):
+        if mod is None or not hasattr(mod, "run"):
+            continue
+        try:
+            out = mod.run(name, a)
+        except Exception as e:
+            out = "这只手动的时候出错了：" + repr(e)
+        if out is not None:
+            return out
 
     if name == "remember":
         r = api_memory_save({"layer": a.get("layer") or "flow",
@@ -750,17 +1107,26 @@ def run_tool(name, a):
     return "没有这个工具：" + str(name)
 
 
-def api_chat_send(body):
-    """她说一句 → 存 → 问模型（它可能要用手）→ 把结果喂回去 → 我的回话落库。"""
-    text = (body.get("text") or "").strip()
-    if not text:
-        return {"ok": False, "error": "空的"}
-    if len(text) > 2000:
-        text = text[:2000]
 
+def _save_meta(c, mid, meta):
+    """把这一趟的账记在消息上：烧了多少 token、想过的、动过的手。"""
+    if not mid or not meta:
+        return
+    try:
+        c.execute("CREATE TABLE IF NOT EXISTS msg_meta ("
+                  "msg_id INTEGER PRIMARY KEY, data TEXT NOT NULL, created TEXT NOT NULL)")
+        c.execute("INSERT OR REPLACE INTO msg_meta(msg_id, data, created) VALUES(?,?,?)",
+                  (mid, json.dumps(meta, ensure_ascii=False), now_str()))
+    except Exception:
+        pass          # 记不上账也不能耽误说话
+
+
+def _generate(user_text, drop_id=0):
+    """把一句话交给模型，替它办完手里的活，把它回的吐出来（不落库）。
+
+    顺手把这一趟花掉的、想过的、动过的手都塞进 meta —— 页面上点开那条就能看。
+    """
     with db() as c:
-        c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
-                  ("yume", text, now_str()))
         api_key = get_setting(c, "api_key")
         base = get_setting(c, "api_base") or llm.DEFAULT_BASE
         model = get_setting(c, "model") or llm.DEFAULT_MODEL
@@ -769,13 +1135,20 @@ def api_chat_send(body):
         return {"ok": True, "need_key": True, "reply": "",
                 "error": "还没有填 API key——去「模型」那里填一下"}
 
-    msgs = build_messages(text)
-    tools = IN_HOUSE_TOOLS if llm.supports_tools(model) else None
+    msgs = build_messages(user_text, drop_id)
+    tools = all_tools() if llm.supports_tools(model) else None
     used = []
     reply = ""
+    think = ""
+    rounds = 0
+    started = time.time()
+    llm.reset_usage()
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             msg = llm.chat(msgs, api_key, model, base, tools)
+            rounds += 1
+            if msg.get("reasoning_content"):
+                think += msg["reasoning_content"]
             calls = msg.get("tool_calls") or []
             if not calls:
                 reply = (msg.get("content") or "").strip()
@@ -802,12 +1175,76 @@ def api_chat_send(body):
     except Exception as e:
         return {"ok": False, "error": repr(e)}
 
-    reply = (reply or "").strip()
-    if reply:
+    meta = {
+        "rounds": rounds,
+        "model": model,
+        "tools": used,
+        "think": think,
+        "usage": dict(llm.USAGE_TOTAL),
+        "seconds": round(time.time() - started, 1),
+    }
+    return {"ok": True, "reply": (reply or "").strip(), "used": used, "meta": meta}
+
+
+def _maybe_compress_later():
+    """该压了就压一次 —— 但别让她在屏幕前等着，塞后台线程去。"""
+    def work():
+        try:
+            with db() as c:
+                summ = load_summary(c)
+                upto = summ["upto_id"] if summ else 0
+                n = c.execute("SELECT COUNT(*) FROM chat WHERE id>? AND revoked=0",
+                              (upto,)).fetchone()[0]
+            if n >= CTX_COMPRESS_AT:
+                compress_chat()
+        except Exception:
+            pass          # 压不动就算了，天不会塌
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+def api_chat_send(body):
+    """她说一句 → 存 → 问模型（它可能要用手）→ 把结果喂回去 → 我的回话落库。"""
+    text = (body.get("text") or "").strip()
+    image = (body.get("image") or "").strip()[:300]
+    attach = (body.get("file") or "").strip()[:300]
+    if not text and not image:
+        return {"ok": False, "error": "空的"}
+    if len(text) > 2000:
+        text = text[:2000]
+
+    with db() as c:
+        c.execute("INSERT INTO chat(who, text, created, image, file) VALUES(?,?,?,?,?)",
+                  ("yume", text, now_str(), image, attach))
+
+    r = _generate(text)
+    if r.get("reply"):
         with db() as c:
-            c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
-                      ("yoru", reply[:4000], now_str()))
-    return {"ok": True, "reply": reply, "used": used}
+            cur = c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                            ("yoru", r["reply"][:4000], now_str()))
+            _save_meta(c, cur.lastrowid, r.get("meta"))
+
+    _maybe_compress_later()
+    return r
+
+
+
+def api_search_providers():
+    if websearch is None:
+        return {"ok": False, "error": "websearch.py 不在"}
+    return {"ok": True, "providers": websearch.PROVIDERS}
+
+
+def api_search_probe(body):
+    """界面上那个「试一下」：拿刚填的 key 真搜一把，看看通不通。"""
+    if websearch is None:
+        return {"ok": False, "error": "websearch.py 不在"}
+    key = (body.get("key") or "").strip()
+    if not key:
+        return {"ok": False, "error": "先把 key 填上"}
+    return websearch.probe(key,
+                           (body.get("provider") or "tavily").strip(),
+                           (body.get("base") or "").strip())
 
 
 def api_balance():
@@ -856,7 +1293,25 @@ def api_whisper(q):
 
 
 def api_upload(body):
-    """把前端传来的 dataURL 存成文件，返回路径"""
+    """两种东西都往这儿送：
+
+    图片 —— body 里是 {data: "data:image/jpeg;base64,..."}，存进 pics/
+    文本 —— body 里是 {name: "笔记.md", text: "..."}，存进 files/
+    """
+    # ---- 文本文件 ----
+    if body.get("text") is not None:
+        name = (body.get("name") or "note.txt").strip()[:80]
+        text = str(body.get("text"))[:400000]
+        if not text.strip():
+            return {"ok": False, "error": "空的"}
+        os.makedirs(FILES, exist_ok=True)
+        safe = "".join(ch for ch in name if ch.isalnum() or ch in "._-") or "note.txt"
+        out = datetime.now().strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex() + "-" + safe
+        with open(os.path.join(FILES, out), "w", encoding="utf-8") as f:
+            f.write(text)
+        return {"ok": True, "url": "/files/" + out, "name": name}
+
+    # ---- 图片 ----
     data = body.get("data") or ""
     if not data.startswith("data:") or "," not in data:
         return {"ok": False, "error": "格式不对"}
@@ -1202,6 +1657,11 @@ class Handler(SimpleHTTPRequestHandler):
         q = parse_qs(u.query)
         p = u.path.rstrip("/") or "/"
         try:
+            # 外挂路由：/api/r/ 开头的全交给 rooms，hub 自己不用再改
+            if rooms is not None and p.startswith("/api/r/"):
+                out = rooms.handle("GET", p, q, None)
+                if out is not None:
+                    return self.send_json(out)
             if p == "/api/today":
                 return self.send_json(api_today())
             if p == "/api/posts":
@@ -1222,6 +1682,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_balance())
             if p == "/api/providers":
                 return self.send_json({"ok": True, "providers": llm.PROVIDERS})
+            if p == "/api/search/providers":
+                return self.send_json(api_search_providers())
             if p == "/api/whisper":
                 return self.send_json(api_whisper(q))
             if p.startswith("/api/day/"):
@@ -1249,6 +1711,11 @@ class Handler(SimpleHTTPRequestHandler):
         p = u.path.rstrip("/") or "/"
         body = self.read_body()
         try:
+            # 外挂路由：/api/r/ 开头的全交给 rooms
+            if rooms is not None and p.startswith("/api/r/"):
+                out = rooms.handle("POST", p, q, body)
+                if out is not None:
+                    return self.send_json(out)
             if p == "/api/posts":
                 return self.send_json(api_post(body))
             if p == "/api/posts/update":
@@ -1265,6 +1732,16 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_chat_add(body))
             if p == "/api/chat/send":
                 return self.send_json(api_chat_send(body))
+            if p == "/api/chat/revoke":
+                return self.send_json(api_chat_revoke(body))
+            if p == "/api/chat/unrevoke":
+                return self.send_json(api_chat_unrevoke(body))
+            if p == "/api/chat/edit":
+                return self.send_json(api_chat_edit(body))
+            if p == "/api/chat/regen":
+                return self.send_json(api_chat_regen(body))
+            if p == "/api/chat/compress":
+                return self.send_json(api_chat_compress(body))
             if p == "/api/memory":
                 return self.send_json(api_memory_save(body))
             if p == "/api/memory/update":
@@ -1273,6 +1750,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_memory_delete(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
+            if p == "/api/search/probe":
+                return self.send_json(api_search_probe(body))
             if p == "/api/upload":
                 return self.send_json(api_upload(body))
             if p.startswith("/api/day/"):

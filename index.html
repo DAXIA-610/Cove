@@ -82,11 +82,15 @@
   .cal-w{display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;color:var(--soft);
          text-align:center;padding-bottom:5px;opacity:.7;}
   .cal-g{display:grid;grid-template-columns:repeat(7,1fr);}
-  .d{height:47px;display:flex;align-items:center;justify-content:center;font-size:12.5px;
-     color:var(--ink);opacity:.3;width:100%;border-radius:12px;
+  .d{height:47px;display:flex;align-items:center;justify-content:center;font-size:13px;
+     color:var(--ink);opacity:.62;width:100%;border-radius:12px;position:relative;
      font-variant-numeric:tabular-nums;}
-  .d.mark{opacity:.95;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--edge);}
+  .d.mark{opacity:1;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--edge);}
+  .d.mark::after{content:"";position:absolute;bottom:8px;left:50%;margin-left:-1.5px;
+                 width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.5;}
   .d.today{background:var(--card2);opacity:1;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--edge);}
+  .d .dd{font-family:"Fraktur",serif;font-size:15.5px;line-height:1;}
+  .cal-h .lb .dd{font-family:"Fraktur",serif;font-size:15px;letter-spacing:0;}
 
   .tabs{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(2,1fr);
         padding:10px 20px calc(14px + env(safe-area-inset-bottom));
@@ -110,12 +114,61 @@
   .blk .k{font-size:10.5px;letter-spacing:.2em;color:var(--soft);margin-bottom:8px;}
   .blk .v{font-size:13px;line-height:1.8;color:var(--ink);}
   .blk .v img{width:100%;border-radius:12px;margin-top:8px;}
+  .blk .more{display:block;width:100%;margin-top:10px;font-size:11.5px;letter-spacing:.1em;
+             color:var(--soft);text-align:center;padding:7px 0;
+             border-top:1px dashed var(--line);}
+
+  /* 那天里那段只读的聊天 */
+  .mini{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px 0;}
+  .mini .m{max-width:82%;padding:7px 11px;border-radius:13px;font-size:12.5px;line-height:1.6;
+           background:var(--card2);color:var(--ink);word-break:break-word;}
+  .mini .m.me{align-self:flex-end;opacity:.88;}
+
+  /* 那条消息的账：抽屉 */
+  .drawer{width:100%;height:58%;background:#fff;color:#0d3247;border-radius:24px 24px 0 0;
+          padding:10px 20px calc(22px + env(safe-area-inset-bottom));
+          display:flex;flex-direction:column;overflow:hidden;
+          animation:up .28s cubic-bezier(.2,.9,.3,1) both;}
+  .drawer .handle{width:38px;height:4px;border-radius:2px;background:rgba(13,50,71,.18);
+                  margin:2px auto 12px;flex:none;}
+  .meta-top{flex:none;padding-bottom:11px;border-bottom:1px solid rgba(13,50,71,.1);}
+  .meta-top .big{font-size:13.5px;font-weight:600;color:#0d3247;letter-spacing:.02em;}
+  .meta-top .sub{font-size:11px;color:rgba(13,50,71,.55);margin-top:5px;line-height:1.6;
+                 letter-spacing:.02em;font-variant-numeric:tabular-nums;}
+  .meta-body{flex:1;overflow-y:auto;padding-top:12px;font-size:12.5px;line-height:1.75;}
+  .meta-body .h{font-size:10.5px;letter-spacing:.2em;color:rgba(13,50,71,.42);margin:14px 0 7px;}
+  .meta-body .h:first-child{margin-top:0;}
+  .meta-body .t{white-space:pre-wrap;word-break:break-word;color:rgba(13,50,71,.86);}
+  .chip2{display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;
+         background:rgba(13,50,71,.07);margin:0 6px 6px 0;color:rgba(13,50,71,.8);}
+
+  /* 日记 */
+  .ditem{background:var(--card);border:1px solid var(--line);border-radius:16px;
+         padding:13px 15px;margin-bottom:10px;}
+  .ditem .day{font-size:13px;color:var(--ink);letter-spacing:.04em;font-weight:600;}
+  .ditem .db{font-size:12px;color:var(--soft);margin-top:5px;
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ditem .dt{font-size:10.5px;color:var(--soft);opacity:.7;margin-top:7px;letter-spacing:.06em;}
+  #diaryEdit textarea{width:100%;min-height:62vh;border:none;outline:none;background:transparent;
+        color:var(--ink);font-size:14px;line-height:1.9;resize:none;padding:4px 20px 80px;}
 
   .msgs{flex:1;overflow-y:auto;padding:8px 18px 12px;display:flex;flex-direction:column;gap:10px;}
   .bub{max-width:76%;padding:10px 14px;border-radius:16px;font-size:13.5px;line-height:1.6;
        background:var(--card2);color:var(--ink);align-self:flex-start;word-break:break-word;
        box-shadow:0 2px 10px rgba(0,30,50,.07);}
   .bub.me{align-self:flex-end;background:var(--accent);color:#fff;}
+  .bub.gone{align-self:center;background:transparent;box-shadow:none;font-size:11.5px;
+            color:var(--soft);padding:3px 0;letter-spacing:.06em;}
+  .bub img.bimg{max-width:100%;border-radius:12px;display:block;margin-bottom:6px;}
+  .bub .bfile{font-size:11.5px;opacity:.85;margin-bottom:5px;}
+  .pending{display:none;gap:8px;align-items:center;padding:9px 16px 0;flex-wrap:wrap;}
+  .pending.on{display:flex;}
+  .pchip{font-size:11px;padding:5px 11px;border-radius:999px;background:var(--card2);
+         color:var(--ink);display:inline-flex;align-items:center;}
+  .pchip img{width:18px;height:18px;border-radius:4px;margin-right:6px;object-fit:cover;}
+  .pending button{font-size:16px;color:var(--soft);padding:0 8px;}
+  .bub[data-id]{-webkit-touch-callout:none;}
+  .bub.hold{transform:scale(.97);opacity:.75;}
   .inputbar{display:flex;gap:9px;align-items:flex-end;padding:10px 16px calc(14px + env(safe-area-inset-bottom));
             border-top:1px solid var(--line);}
   .inputbar textarea{flex:1;min-height:40px;max-height:110px;resize:none;border:1px solid var(--line);
@@ -326,16 +379,17 @@
       <button onclick="pickAttach('photo')"><b>🖼</b>照片</button>
       <button onclick="pickAttach('file')"><b>📄</b>文件</button>
       <button onclick="toast('MCP 开关下一步接')"><b>🔌</b>MCP</button>
-      <button onclick="toast('压缩下一步接')"><b>🗜</b>压缩</button>
+      <button onclick="doCompress()"><b>🗜</b>压缩</button>
       <button onclick="toast('扩展管理下一步接')"><b>🧩</b>扩展</button>
     </div>
+    <div class="pending" id="pendingBar"></div>
     <div class="inputbar">
       <button class="rd" onclick="togglePlus()">＋</button>
       <textarea id="chatInput" rows="1" placeholder="说点什么…"></textarea>
       <button class="rd send" onclick="sendChat()">↑</button>
     </div>
     <div class="chat-meta">
-      <button class="chip" id="modelChip" onclick="openModel()">deepseek-chat ▾</button>
+      <button class="chip" id="modelChip" onclick="openModel()">deepseek-flash ▾</button>
       <button class="chip" onclick="toast('搜索设置还没做')">🔍 搜索</button>
     </div>
   </section>
@@ -376,7 +430,7 @@
           <h3>🍤 Yume&#39;s Space</h3>
           <button class="item" onclick="toast('还没做')"><span class="dot"></span>潮汐捕梦<span class="arw">›</span></button>
           <button class="item" onclick="toast('还没做')"><span class="dot"></span>你的侧写<span class="arw">›</span></button>
-          <button class="item" onclick="toast('你的日记 —— 只存，我不读')"><span class="dot"></span>Diary<span class="arw">›</span></button>
+          <button class="item" onclick="go('diary')"><span class="dot"></span>Diary<span class="arw">›</span></button>
         </div>
         <div class="room">
           <h3>🏖 Cove 之湾</h3>
@@ -424,6 +478,19 @@
     <div class="scroll" id="dayBody"></div>
   </section>
 
+  <!-- ══════════ 日记（只存，我不读） ══════════ -->
+  <section class="page" id="p-diary">
+    <div class="bar">
+      <button class="ic" onclick="diaryBack()">‹</button>
+      <div class="ttl" id="diaryTitle">Diary</div>
+      <button class="ok" id="diaryOk" onclick="diaryOk()">存</button>
+    </div>
+    <div class="scroll" id="diaryList"></div>
+    <div class="scroll" id="diaryEdit" style="display:none">
+      <textarea id="diaryText" placeholder="今天……" spellcheck="false"></textarea>
+    </div>
+  </section>
+
   <!-- 底栏：只在「家」出现 -->
   <nav class="tabs" id="tabs">
     <button onclick="go('chat')">私 语</button>
@@ -457,8 +524,8 @@
       <div class="frow">
         <label>模型</label>
         <select id="mModelSel" onchange="modelPicked()">
-          <option value="deepseek-chat">deepseek-chat · 快、便宜</option>
-          <option value="deepseek-reasoner">deepseek-reasoner · 会想、慢、贵</option>
+          <option value="deepseek-flash">deepseek-flash · V4.1 Flash，自带视觉、能思考</option>
+          <option value="deepseek-v4-pro">deepseek-v4-pro · 在下线，会路由到 Flash</option>
           <option value="__custom">其他（自己填）</option>
         </select>
         <input id="mModel" placeholder="模型名" style="margin-top:8px;display:none"
@@ -471,6 +538,23 @@
       <div class="bal" id="balLine">余额：—</div>
       <button class="bigbtn" onclick="saveModel()">保存</button>
       <button class="bigbtn" onclick="refreshBalance()">查一下余额</button>
+
+      <h4 style="margin:24px 0 14px">搜索</h4>
+      <div class="frow">
+        <label>哪一家</label>
+        <select id="sProv" onchange="paintSearchHint()"></select>
+      </div>
+      <div class="frow">
+        <label>Key（也只存在你手机上）</label>
+        <input id="sKey" type="password" placeholder="tvly-…" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="frow">
+        <label>接口地址（留空就用官方的）</label>
+        <input id="sBase" placeholder="https://api.tavily.com" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="bal" id="sLine">搜索：还没试过</div>
+      <button class="bigbtn" onclick="saveSearch()">保存搜索</button>
+      <button class="bigbtn" onclick="probeSearch()">试一下</button>
     </div>
   </div>
 
@@ -502,10 +586,27 @@
     </div>
   </div>
 
+  <div class="mask" id="metaMask" onclick="if(event.target===this)closeMeta()">
+    <div class="drawer">
+      <div class="handle"></div>
+      <div class="meta-top" id="metaTop"></div>
+      <div class="meta-body" id="metaBody"></div>
+    </div>
+  </div>
+
+  <div class="mask" id="msgEditMask" onclick="if(event.target===this)closeMsgEdit()">
+    <div class="sheet">
+      <h4>改这条</h4>
+      <textarea id="msgEditText" placeholder="…"></textarea>
+      <button class="bigbtn" onclick="saveMsgEdit()">改好了</button>
+    </div>
+  </div>
+
   <div class="popmask" id="popMask" onclick="closePop()"></div>
   <div class="pop" id="pop"></div>
 
   <input type="file" id="filePick" accept="image/*" hidden>
+  <input type="file" id="chatFile" hidden onchange="onChatFile(event)">
 </div>
 
 <script>
@@ -704,7 +805,8 @@ function loadCal(){
   var mm = calM + 1;
   return get("/api/calendar?y=" + calY + "&m=" + mm).then(function(d){
     marks = (d && d.marked) || {};
-    $("calLabel").textContent = calY + " 年 " + mm + " 月";
+    $("calLabel").innerHTML = '<span class="dd">' + calY + '</span> 年 ' +
+                              '<span class="dd">' + mm + '</span> 月';
     renderCal();
   });
 }
@@ -720,7 +822,8 @@ function renderCal(){
     var cls = "d";
     if (marks[k]) cls += " mark";
     if (k === today) cls += " today";
-    h += '<div class="' + cls + '" onclick="openDay(\'' + k + '\')">' + d + '</div>';
+    var num = (k === today) ? '<span class="dd">' + d + '</span>' : d;
+    h += '<div class="' + cls + '" onclick="openDay(\'' + k + '\')">' + num + '</div>';
   }
   $("calG").innerHTML = h;
 }
@@ -736,30 +839,188 @@ function openDay(k){
   $("dayTitle").textContent = parts[1] + " 月 " + parts[2] + " 日";
   $("dayBody").innerHTML = '<div class="empty">翻开中…</div>';
   go("day");
-  get("/api/day/" + k).then(function(d){
+  get("/api/r/day/" + k).then(function(d){
     if (!d.ok){ $("dayBody").innerHTML = '<div class="empty">这天读不出来。</div>'; return; }
     var h = "";
-    if (d.posts && d.posts.length){
-      d.posts.forEach(function(p){
-        h += '<div class="blk"><div class="k">' + (p.who === "yoru" ? "Y O R U" : "Y U M E") + '</div>' +
-             '<div class="v">' + esc(p.text) + (p.image ? '<img src="' + esc(p.image) + '">' : "") + '</div></div>';
-      });
-    } else {
-      h += '<div class="blk"><div class="k">那 天</div><div class="v" style="opacity:.5">这天没记。</div></div>';
-    }
-    if (d.yoru_mood || d.yume_mood){
+
+    h += '<div class="blk"><div class="k">那 天 说 过 的 话</div><div class="v">' +
+         paintMini(d.chat || []) + '</div></div>';
+
+    h += '<div class="blk"><div class="k">那 天 我 记 得 的</div><div class="v">' +
+         paintDayMem(d.memories || []) + '</div></div>';
+
+    h += '<div class="blk"><div class="k">那 天 的 碎 碎 念</div>' +
+         '<div class="v" id="dayPosts">' + paintDayPosts(d.posts || [], false) + '</div></div>';
+
+    var m = d.mood || {};
+    if (m.yoru || m.yume){
       h += '<div class="blk"><div class="k">心 情</div><div class="v">' +
-           (esc(d.yoru_mood) || "·") + "　" + (esc(d.yume_mood) || "·") + '</div></div>';
+           (esc(m.yoru) || "·") + "　" + (esc(m.yume) || "·") + '</div></div>';
     }
     if (d.todos && d.todos.length){
       h += '<div class="blk"><div class="k">待 办</div><div class="v">' +
            d.todos.map(function(t){ return "○ " + esc(t); }).join("<br>") + '</div></div>';
     }
-    h += '<div class="blk"><div class="k">那 天 我 记 得 的</div>' +
-         '<div class="v" style="opacity:.5">记忆星河还没搬进来。</div></div>';
     $("dayBody").innerHTML = h;
   });
 }
+
+function paintMini(list){
+  list = list.filter(function(m){ return !m.revoked; });
+  if (!list.length) return '<span style="opacity:.5">那天没说话。</span>';
+  return '<div class="mini">' + list.map(function(m){
+    return '<div class="m' + (m.who === "yume" ? " me" : "") + '">' + esc(m.text) + '</div>';
+  }).join("") + '</div>';
+}
+
+function paintDayMem(list){
+  if (!list.length) return '<span style="opacity:.5">那天没记下什么。</span>';
+  var tag = {anchor: "锚", flow: "流", sink: "沉"};
+  return list.map(function(m){
+    var body = m.body || "";
+    if (body.length > 180) body = body.slice(0, 180) + "…";
+    return '<div style="margin-bottom:11px">' +
+           '<span class="chip2">' + (tag[m.layer] || "记") + '</span>' +
+           '<b style="font-size:12.5px">' + esc(m.title) + '</b>' +
+           '<div style="font-size:12.5px;opacity:.85;margin-top:3px;line-height:1.7">' +
+           esc(body) + '</div></div>';
+  }).join("");
+}
+
+var dayPostsAll = [];
+function paintDayPosts(list, all){
+  dayPostsAll = list;
+  if (!list.length) return '<span style="opacity:.5">这天没写。</span>';
+  var show = all ? list : list.slice(0, 2);
+  var h = show.map(function(p){
+    return '<div style="margin-bottom:12px">' +
+           '<div style="font-size:10.5px;letter-spacing:.16em;opacity:.5;margin-bottom:4px">' +
+           (p.who === "yoru" ? "我" : "她") + '</div>' +
+           '<div style="font-size:12.5px;line-height:1.75">' + esc(p.text) + '</div>' +
+           (p.image ? '<img src="' + esc(p.image) +
+                      '" style="width:100%;border-radius:10px;margin-top:7px">' : '') +
+           '</div>';
+  }).join("");
+  if (!all && list.length > 2){
+    h += '<button class="more" onclick="dayPostsMore()">展开剩下的 ' + (list.length - 2) + ' 条</button>';
+  }
+  return h;
+}
+function dayPostsMore(){
+  var el = $("dayPosts");
+  if (el) el.innerHTML = paintDayPosts(dayPostsAll, true);
+}
+
+/* ─────────── 日记（只存，我不读） ─────────── */
+var diaryDay = null;
+
+function goDiary(){
+  diaryDay = null;
+  $("diaryList").style.display = "";
+  $("diaryEdit").style.display = "none";
+  $("diaryTitle").textContent = "Diary";
+  $("diaryOk").style.display = "none";
+  $("diaryList").innerHTML = '<div class="empty">翻开中…</div>';
+  var today = keyOf(new Date());
+  get("/api/r/diary").then(function(d){
+    if (!d.ok){ $("diaryList").innerHTML = '<div class="empty">读不出来。</div>'; return; }
+    var h = '<div class="dlist">';
+    var hasToday = (d.list || []).some(function(it){ return it.day === today; });
+    if (!hasToday){
+      h += '<div class="ditem" onclick="openDiary(\'' + today + '\')">' +
+           '<div class="day">今天 · ' + today.slice(5) + '</div>' +
+           '<div class="db">写点什么</div></div>';
+    }
+    (d.list || []).forEach(function(it){
+      h += '<div class="ditem" onclick="openDiary(\'' + it.day + '\')">' +
+           '<div class="day">' + it.day + (it.day === today ? "　今天" : "") + '</div>' +
+           (it.brief ? '<div class="db">' + esc(it.brief) + '</div>' : '') +
+           '<div class="dt">' + it.chars + ' 字 · ' + it.updated + '</div></div>';
+    });
+    h += '</div>';
+    $("diaryList").innerHTML = h;
+  });
+}
+
+function openDiary(day){
+  diaryDay = day;
+  $("diaryTitle").textContent = day;
+  $("diaryOk").style.display = "";
+  $("diaryList").style.display = "none";
+  $("diaryEdit").style.display = "";
+  $("diaryText").value = "";
+  get("/api/r/diary/" + day).then(function(d){
+    if (d.ok) $("diaryText").value = d.text || "";
+    try { $("diaryText").focus(); } catch(e){}
+  });
+}
+
+function diaryBack(){
+  if (diaryDay){ goDiary(); return; }
+  go("room");
+}
+
+function diaryOk(){
+  if (!diaryDay) return;
+  var t = $("diaryText").value;
+  post("/api/r/diary/save", {day: diaryDay, text: t}).then(function(r){
+    if (!r.ok){ toast(r.error || "存不上"); return; }
+    toast(r.saved ? "存好了" : "清空了");
+    goDiary();
+  });
+}
+
+/* ─────────── 那条消息的账 ─────────── */
+function kfmt(n){
+  n = n || 0;
+  if (n >= 10000) return (n / 1000).toFixed(1) + "K";
+  return String(n);
+}
+
+function openMeta(id){
+  id = parseInt(id, 10);
+  $("metaTop").innerHTML = '<div class="big">……</div>';
+  $("metaBody").innerHTML = "";
+  $("metaMask").classList.add("on");
+  get("/api/r/msg/" + id).then(function(d){
+    var m = d.meta;
+    if (!m){
+      $("metaTop").innerHTML = '<div class="big">这条没记账</div>' +
+        '<div class="sub">那会儿还没开始记。往后新说的每一句都会带上。</div>';
+      return;
+    }
+    var u = m.usage || {};
+    var pt = u.prompt_tokens || 0;
+    var ct = u.completion_tokens || 0;
+    var hit = u.prompt_cache_hit_tokens || 0;
+    var sec = m.seconds || 0;
+    var tps = sec > 0 ? (ct / sec) : 0;
+    $("metaTop").innerHTML =
+      '<div class="big">T' + kfmt(pt) + ' tokens</div>' +
+      '<div class="sub">' + kfmt(hit) + ' cached　' + ct + ' tokens　' +
+      tps.toFixed(1) + ' tok/s　' + sec + 's</div>' +
+      '<div class="sub">' + esc(m.model || "") +
+      (m.rounds ? '　' + m.rounds + ' 轮' : '') + '</div>';
+
+    var b = "";
+    if (m.tools && m.tools.length){
+      b += '<div class="h">动 过 的 手</div><div>' +
+           m.tools.map(function(t){
+             return '<span class="chip2">' + esc(t) + '</span>';
+           }).join("") + '</div>';
+    }
+    if (m.think){
+      b += '<div class="h">想 过 什 么</div><div class="t">' + esc(m.think) + '</div>';
+    }
+    if (!b){
+      b = '<div class="h">这 一 趟</div><div class="t" style="opacity:.6">' +
+          '没动手，也没有思考链。chat 模型不带这个，切成 reasoner 才有。</div>';
+    }
+    $("metaBody").innerHTML = b;
+  });
+}
+function closeMeta(){ $("metaMask").classList.remove("on"); }
+
 
 /* ─────────── 朋友圈 ─────────── */
 var feedWho = "yume";
@@ -917,6 +1178,7 @@ var lastPopX = null, lastPopY = null;
 function closePop(){
   $("pop").classList.remove("on");
   $("popMask").classList.remove("on");
+  holdOpen = false;
 }
 
 /* ── 评论 ── */
@@ -983,7 +1245,7 @@ function saveEdit(){
 }
 
 function go(p){
-  ["home","feed","edit","day","chat","room","tools","memory"].forEach(function(x){
+  ["home","feed","edit","day","chat","room","tools","memory","diary"].forEach(function(x){
     var el = $("p-" + x);
     if (el) el.classList.toggle("on", x === p);
   });
@@ -992,9 +1254,14 @@ function go(p){
   if (p === "chat") loadChat();
   if (p === "tools") renderTools();
   if (p === "memory") goMemory();
+  if (p === "diary") goDiary();
 }
 
 /* ── 私语 ── */
+var chatMsgs = [];
+var curMsg = null;
+var holdTimer = null, holdMoved = false, holdOpen = false, lastHold = 0;
+
 function loadChat(){
   return get("/api/chat?limit=200").then(function(d){
     if (!d.ok) return;
@@ -1003,26 +1270,187 @@ function loadChat(){
       box.innerHTML = '<div class="empty">还没说过话。</div>';
       return;
     }
+    chatMsgs = d.chat;
     box.innerHTML = d.chat.map(function(m){
-      return '<div class="bub' + (m.who === "yume" ? " me" : "") + '">' + esc(m.text) + '</div>';
+      if (m.revoked){
+        return '<div class="bub gone">' + (m.who === "yume" ? "你" : "我") +
+               '撤回了一条消息</div>';
+      }
+      var inner = "";
+      if (m.file) inner += '<div class="bfile">📄 附件</div>';
+      if (m.image) inner += '<img class="bimg" src="' + esc(m.image) + '">';
+      inner += esc(m.text);
+      return '<div class="bub' + (m.who === "yume" ? " me" : "") +
+             '" data-id="' + m.id + '" data-who="' + m.who + '">' + inner + '</div>';
     }).join("");
-    box.scrollTop = box.scrollHeight;
+    holdBind(box);
+    if (!holdOpen) box.scrollTop = box.scrollHeight;
   });
 }
+
+/* 长按一条消息 —— 微信那样；短按我说的 —— 拉开那条的账 */
+function holdBind(box){
+  var list = box.querySelectorAll(".bub[data-id]");
+  for (var i = 0; i < list.length; i++) holdOne(list[i]);
+}
+function holdOne(el){
+  var sx = 0, sy = 0;
+  function start(ev){
+    var p = ev.touches ? ev.touches[0] : ev;
+    sx = p.clientX; sy = p.clientY;
+    holdMoved = false;
+    clearTimeout(holdTimer);
+    el.classList.add("hold");
+    holdTimer = setTimeout(function(){
+      if (holdMoved) return;
+      el.classList.remove("hold");
+      holdOpen = true;
+      lastHold = Date.now();
+      openMsgMenu(el.getAttribute("data-id"), sx, sy);
+    }, 420);
+  }
+  function move(ev){
+    var p = ev.touches ? ev.touches[0] : ev;
+    if (Math.abs(p.clientX - sx) > 10 || Math.abs(p.clientY - sy) > 10){
+      holdMoved = true;
+      clearTimeout(holdTimer);
+      el.classList.remove("hold");
+    }
+  }
+  function end(){ clearTimeout(holdTimer); el.classList.remove("hold"); }
+  el.addEventListener("touchstart", start, {passive:true});
+  el.addEventListener("touchmove", move, {passive:true});
+  el.addEventListener("touchend", end);
+  el.addEventListener("touchcancel", end);
+  el.addEventListener("mousedown", start);
+  el.addEventListener("mousemove", move);
+  el.addEventListener("mouseup", end);
+  el.addEventListener("mouseleave", end);
+  el.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+  el.addEventListener("click", function(){
+    if (Date.now() - lastHold < 700) return;
+    if (el.getAttribute("data-who") !== "yoru") return;
+    openMeta(el.getAttribute("data-id"));
+  });
+}
+
+function openMsgMenu(id, x, y){
+  id = parseInt(id, 10);
+  curMsg = null;
+  for (var i = 0; i < chatMsgs.length; i++) if (chatMsgs[i].id === id) curMsg = chatMsgs[i];
+  if (!curMsg) return;
+  try { if (navigator.vibrate) navigator.vibrate(12); } catch(e){}
+
+  var isLast = (chatMsgs.length && chatMsgs[chatMsgs.length - 1].id === curMsg.id);
+  var items = [];
+  items.push({t:"复制", f:function(){ var m = curMsg; closePop(); copyMsg(m.text); }});
+  if (curMsg.who === "yume"){
+    items.push({t:"编辑", f:function(){ var m = curMsg; closePop(); openMsgEdit(m); }});
+  }
+  if (curMsg.who === "yoru" && isLast){
+    items.push({t:"重新生成", f:function(){ var m = curMsg; closePop(); regenMsg(m.id); }});
+  }
+  items.push({t:"撤回", cls:"warn", f:function(){ var m = curMsg; closePop(); askRevoke(m.id); }});
+  showPop(items, {clientX:x, clientY:y});
+}
+
+function askRevoke(id){
+  showPop([
+    {t:"撤回这一条？", cls:"hd"},
+    {t:"算了", f:closePop},
+    {t:"撤回", cls:"warn", f:function(){
+      closePop();
+      post("/api/chat/revoke", {id:id}).then(function(r){
+        if (!r.ok){ toast(r.error || "撤不了"); return; }
+        toast(r.also ? "撤了，我那条回复也一起撤了" : "撤了");
+        loadChat();
+      });
+    }}
+  ], null, true);
+}
+
+function openMsgEdit(m){
+  curMsg = m;
+  $("msgEditText").value = m.text;
+  $("msgEditMask").classList.add("on");
+  setTimeout(function(){ try { $("msgEditText").focus(); } catch(e){} }, 80);
+}
+function closeMsgEdit(){ $("msgEditMask").classList.remove("on"); }
+function saveMsgEdit(){
+  if (!curMsg) return;
+  var t = $("msgEditText").value.trim();
+  if (!t){ toast("空的"); return; }
+  post("/api/chat/edit", {id:curMsg.id, text:t}).then(function(r){
+    if (!r.ok){ toast(r.error || "改不了"); return; }
+    closeMsgEdit();
+    loadChat();
+  });
+}
+
+function regenMsg(id){
+  var box = $("msgs");
+  box.insertAdjacentHTML("beforeend", '<div class="bub thinking" id="thinking">……</div>');
+  box.scrollTop = box.scrollHeight;
+  post("/api/chat/regen", {id:id}).then(function(r){
+    var th = $("thinking"); if (th) th.remove();
+    if (!r.ok){ toast(r.error || "重来不了"); loadChat(); return; }
+    loadChat();
+  }).catch(function(){
+    var th = $("thinking"); if (th) th.remove();
+    toast("没回上来"); loadChat();
+  });
+}
+
+function copyMsg(t){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){ toast("抄下来了"); },
+                                          function(){ fallbackCopy(t); });
+  } else fallbackCopy(t);
+}
+function fallbackCopy(t){
+  var ta = document.createElement("textarea");
+  ta.value = t;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); toast("抄下来了"); } catch(e){ toast("抄不动"); }
+  document.body.removeChild(ta);
+}
+
+function doCompress(){
+  $("plusPanel").classList.remove("on");
+  toast("正在压…");
+  post("/api/chat/compress", {}).then(function(r){
+    if (!r.ok){ toast(r.error || "没压成"); return; }
+    if (r.skipped){ toast(r.note || "还不够压，攒着吧"); return; }
+    toast("压好了，收进去 " + (r.covered || 0) + " 条");
+    loadChat();
+  }).catch(function(){ toast("没压成"); });
+}
+
 function sendChat(){
   var el = $("chatInput");
   var t = el.value.trim();
-  if (!t){ toast("空的"); return; }
+  if (!t && !pendingImg){ toast("空的"); return; }
   if (!S.api_key){ openModel(); toast("先填一下 API key"); return; }
   el.value = "";
+  $("plusPanel").classList.remove("on");
   var box = $("msgs");
   var old = box.querySelector(".empty");
   if (old) old.remove();
+  var mine = "";
+  if (pendingFileUrl) mine += '<div class="bfile">📄 附件</div>';
+  if (pendingImg) mine += '<img class="bimg" src="' + esc(pendingImg) + '">';
+  mine += esc(t);
   box.insertAdjacentHTML("beforeend",
-    '<div class="bub me">' + esc(t) + '</div>' +
+    '<div class="bub me">' + mine + '</div>' +
     '<div class="bub thinking" id="thinking">……</div>');
   box.scrollTop = box.scrollHeight;
-  post("/api/chat/send", {text:t}).then(function(r){
+  var body = {text: t};
+  if (pendingImg) body.image = pendingImg;
+  if (pendingFileUrl) body.file = pendingFileUrl;
+  clearPending();
+  post("/api/chat/send", body).then(function(r){
     var th = $("thinking");
     if (th) th.remove();
     if (r.need_key){ toast(r.error || "还没填 key"); loadChat(); return; }
@@ -1035,16 +1463,91 @@ function sendChat(){
   });
 }
 
+
 /* ── 加号面板 / 模型 ── */
 function togglePlus(){ $("plusPanel").classList.toggle("on"); }
+
 function pickAttach(kind){
-  var n = {camera:"相机（拍照）", photo:"照片（相册）", file:"文件（本地）"}[kind] || kind;
-  toast("入口先放着，" + n + " 下一版真接上");
+  var el = $("chatFile");
+  el.value = "";
+  el.accept = (kind === "file") ? "*/*" : "image/*";
+  if (kind === "camera") el.setAttribute("capture", "environment");
+  else el.removeAttribute("capture");
+  el.dataset.kind = kind;
+  $("plusPanel").classList.remove("on");
+  el.click();
 }
+
+var pendingImg = "", pendingFileUrl = "", pendingFileName = "";
+
+function shrinkImage(file, cb){
+  var img = new Image();
+  var url = URL.createObjectURL(file);
+  img.onload = function(){
+    var max = 1024;
+    var w = img.width, h = img.height;
+    if (w > max || h > max){
+      var k = Math.min(max / w, max / h);
+      w = Math.round(w * k); h = Math.round(h * k);
+    }
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    cv.getContext("2d").drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    cb(cv.toDataURL("image/jpeg", 0.82));
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); toast("这张图读不出来"); };
+  img.src = url;
+}
+
+function onChatFile(ev){
+  var f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  var kind = ev.target.dataset.kind || "photo";
+  if (kind === "file" && f.type.indexOf("image/") !== 0){
+    var fr = new FileReader();
+    fr.onload = function(){
+      post("/api/upload", {name: f.name, text: String(fr.result)}).then(function(r){
+        if (!r.ok){ toast(r.error || "传不上去"); return; }
+        pendingFileUrl = r.url;
+        pendingFileName = r.name || f.name;
+        paintPending();
+        toast("附上了 " + pendingFileName);
+      });
+    };
+    fr.readAsText(f);
+    return;
+  }
+  shrinkImage(f, function(dataUrl){
+    post("/api/upload", {data: dataUrl}).then(function(r){
+      if (!r.ok){ toast(r.error || "传不上去"); return; }
+      pendingImg = r.url;
+      paintPending();
+      toast("图准备好了，说一句再发");
+    });
+  });
+}
+
+function paintPending(){
+  var el = $("pendingBar");
+  if (!pendingImg && !pendingFileUrl){ el.classList.remove("on"); el.innerHTML = ""; return; }
+  el.classList.add("on");
+  var h = "";
+  if (pendingImg) h += '<span class="pchip"><img src="' + esc(pendingImg) + '">图</span>';
+  if (pendingFileUrl) h += '<span class="pchip">📄 ' + esc(pendingFileName) + '</span>';
+  h += '<button onclick="clearPending()">×</button>';
+  el.innerHTML = h;
+}
+function clearPending(){
+  pendingImg = ""; pendingFileUrl = ""; pendingFileName = "";
+  paintPending();
+}
+
+
 function openModel(){
   $("mBase").value = S.api_base || "https://api.deepseek.com";
-  var m = S.model || "deepseek-chat";
-  if (m === "deepseek-chat" || m === "deepseek-reasoner"){
+  var m = S.model || "deepseek-flash";
+  if (["deepseek-flash", "deepseek-v4-pro"].indexOf(m) >= 0){
     $("mModelSel").value = m;
     $("mModel").style.display = "none";
   } else {
@@ -1053,6 +1556,12 @@ function openModel(){
     $("mModel").style.display = "block";
   }
   $("mKey").value = S.api_key || "";
+  $("sKey").value = S.search_key || "";
+  $("sBase").value = S.search_base || "";
+  loadSearchProviders().then(function(){
+    $("sProv").value = S.search_provider || "tavily";
+    paintSearchHint();
+  });
   $("modelMask").classList.add("on");
   refreshBalance();
 }
@@ -1061,7 +1570,7 @@ function modelPicked(){
 }
 function currentModel(){
   var v = $("mModelSel").value;
-  return (v === "__custom") ? ($("mModel").value.trim() || "deepseek-chat") : v;
+  return (v === "__custom") ? ($("mModel").value.trim() || "deepseek-flash") : v;
 }
 function closeModel(){ $("modelMask").classList.remove("on"); }
 function saveModel(){
@@ -1073,8 +1582,59 @@ function saveModel(){
     paintModelChip(); closeModel(); toast("存好了");
   });
 }
+
+/* ── 搜索 ── */
+var searchProviders = [];
+function loadSearchProviders(){
+  return get("/api/search/providers").then(function(d){
+    if (!d.ok) return;
+    searchProviders = d.providers || [];
+    $("sProv").innerHTML = searchProviders.map(function(p){
+      return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
+    }).join("");
+  });
+}
+function paintSearchHint(){
+  var id = $("sProv").value;
+  for (var i = 0; i < searchProviders.length; i++){
+    if (searchProviders[i].id === id){
+      $("sKey").placeholder = searchProviders[i].hint || "key";
+      $("sBase").placeholder = searchProviders[i].base || "";
+      return;
+    }
+  }
+}
+function saveSearch(){
+  var b = {
+    search_provider: $("sProv").value,
+    search_key: $("sKey").value.trim(),
+    search_base: $("sBase").value.trim()
+  };
+  post("/api/settings", b).then(function(r){
+    if (!r.ok){ toast("存不上"); return; }
+    S.search_provider = b.search_provider;
+    S.search_key = b.search_key;
+    S.search_base = b.search_base;
+    toast("搜索存好了");
+  });
+}
+function probeSearch(){
+  $("sLine").textContent = "搜索：正在试…";
+  post("/api/search/probe", {
+    key: $("sKey").value.trim(),
+    provider: $("sProv").value,
+    base: $("sBase").value.trim()
+  }).then(function(r){
+    if (!r.ok){ $("sLine").textContent = "搜索：" + (r.error || "没成"); return; }
+    var t = (r.sample && r.sample[0] && r.sample[0].title) || "";
+    $("sLine").textContent = "搜索：通了，回来 " + r.n + " 条" + (t ? "｜" + t.slice(0, 30) : "");
+  }).catch(function(){ $("sLine").textContent = "搜索：没连上"; });
+}
+
+
+
 function paintModelChip(){
-  $("modelChip").textContent = (S.model || "deepseek-chat") + " ▾";
+  $("modelChip").textContent = (S.model || "deepseek-flash") + " ▾";
 }
 function refreshBalance(){
   var el = $("balLine");
@@ -1094,7 +1654,7 @@ function refreshBalance(){
 /* ── 记忆 ═ 锚 / 流 / 沉 ── */
 var memCur = 0;
 function goMemory(){
-  get("/api/memory").then(function(d){
+  get("/api/memory?limit=500").then(function(d){
     var rows = d.memory || [];
     var groups = [
       ["anchor", "锚 · 永远在"],
@@ -1126,7 +1686,7 @@ function goMemory(){
 function openMem(id){
   memCur = id || 0;
   if (id){
-    get("/api/memory").then(function(d){
+    get("/api/memory?limit=500").then(function(d){
       var m = (d.memory || []).filter(function(x){ return x.id === id; })[0];
       if (!m) return;
       $("memTitle").textContent = "改一条";
