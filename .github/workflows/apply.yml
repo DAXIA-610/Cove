@@ -1,0 +1,44 @@
+name: apply
+
+# 我往 patch/ 里推一个补丁，这里负责：跑补丁 → 跑体检 → 绿了才提交 → 把用过的补丁删掉。
+# 目的只有一个：**她那边永远只 pull**，看不见这一层。
+# 写这些文件的人是谁不行——反正从 Google 的机器上跑，不占她手机一点力气。
+
+on:
+  push:
+    paths:
+      - "patch/*.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 跑补丁（任何一处对不上就整体不动）
+        run: |
+          for f in patch/*.py; do
+            echo "──────── $f"
+            python3 "$f"
+          done
+
+      - name: 体检（不绿就不提交）
+        run: python3 test_cove.py .
+
+      - name: 收拾 + 提交
+        run: |
+          rm -rf patch __pycache__
+          find . -name '*.bak' -delete
+          git config user.name "cove"
+          git config user.email "cove@localhost"
+          git add -A
+          git commit -m "apply: $(git log -1 --pretty=%s)"
+          git push
