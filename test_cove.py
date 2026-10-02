@@ -137,6 +137,13 @@ c, d = req(base, "/api/today")
 chk("today 有天数和起始日", d.get("days_together", 0) > 0 and d.get("start_day") == "2026-07-14", d)
 chk("today 带着版本号", bool(d.get("version")) and d["version"] != "?", d.get("version"))
 
+# 默认模型名不能是已经下线的旧名字
+import llm as _llm
+chk("默认模型不是废名字", _llm.DEFAULT_MODEL not in _llm.DEAD_NAMES, _llm.DEFAULT_MODEL)
+chk("存着的旧名字会被换掉", _llm.fix_model("deepseek-chat") == _llm.DEFAULT_MODEL, _llm.fix_model("deepseek-chat"))
+chk("正常名字原样还回来", _llm.fix_model("deepseek-v4-pro") == "deepseek-v4-pro", _llm.fix_model("deepseek-v4-pro"))
+chk("空的就当没填，给默认", _llm.fix_model("") == _llm.DEFAULT_MODEL, _llm.fix_model(""))
+
 # ── 4. 碎碎念 / 便签 / 点赞 / 评论 ───────────────────────────────
 print("\n[4] 碎碎念")
 c, d = req(base, "/api/posts", {"who": "yume", "text": "体检·她说的一句"})

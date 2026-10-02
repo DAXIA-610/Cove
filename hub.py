@@ -765,7 +765,7 @@ def compress_chat(force=False, keep=CTX_KEEP_RECENT):
     with db() as c:
         api_key = get_setting(c, "api_key")
         base = get_setting(c, "api_base") or llm.DEFAULT_BASE
-        model = get_setting(c, "model") or llm.DEFAULT_MODEL
+        model = llm.fix_model(get_setting(c, "model"))
         summ = load_summary(c)
         upto = summ["upto_id"] if summ else 0
         rows = rows2list(c.execute(
@@ -1148,7 +1148,7 @@ def _generate(user_text, drop_id=0):
     with db() as c:
         api_key = get_setting(c, "api_key")
         base = get_setting(c, "api_base") or llm.DEFAULT_BASE
-        model = get_setting(c, "model") or llm.DEFAULT_MODEL
+        model = llm.fix_model(get_setting(c, "model"))
 
     if not api_key:
         return {"ok": True, "need_key": True, "reply": "",

@@ -40,6 +40,18 @@ def reset_usage():
 # reasoner 这类"会先想一遍"的模型，不吃 function calling，别给它塞工具
 NO_TOOLS_HINT = ("reasoner", "r1", "think")
 
+# 已经下线的旧名字：谁要是还存着它，我们替他换掉，不去撞那堵墙
+DEAD_NAMES = ("deepseek-chat", "deepseek-reasoner", "deepseek-v3", "deepseek-r1")
+
+
+def fix_model(name):
+    """存着的老名字换成现在的名字。认不出就原样还回去。"""
+    n = (name or "").strip()
+    if not n:
+        return DEFAULT_MODEL
+    return DEFAULT_MODEL if n.lower() in DEAD_NAMES else n
+
+
 # 想加新家，就在这里多写一行。hub 只认 base + model 两个字段。
 PROVIDERS = [
     # 注意：deepseek-chat / deepseek-reasoner 这两个老名字 2026-07-24 就废了。
@@ -81,7 +93,7 @@ def chat(messages, api_key, model=None, base=None, tools=None, timeout=TIMEOUT):
     """发一轮，返回一条完整的 message（可能带 tool_calls）。"""
     if not api_key:
         raise LLMError("还没填 key")
-    model = (model or DEFAULT_MODEL).strip()
+    model = fix_model(model)
 
     payload = {"model": model, "messages": messages, "stream": False}
     if tools and supports_tools(model):
