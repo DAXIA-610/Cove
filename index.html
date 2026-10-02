@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0b2434" />
+<title>Cove · 我们的小海湾</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
+    background:#07131b;display:grid;place-items:center;overflow:hidden;
+  }
+  button{font-family:inherit;border:none;background:none;padding:0;cursor:pointer;color:inherit;}
+  input,textarea,select{font-family:inherit;}
+
+  .frame{
+    position:relative;width:100%;height:100vh;height:100dvh;
+    max-width:430px;max-height:932px;border-radius:42px;overflow:hidden;
+    background:#0b2434;
+    box-shadow:0 40px 120px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);
+    --ink:#0d3247; --ink-soft:rgba(13,50,71,.55);
+    --card:rgba(255,255,255,.52); --card-2:rgba(255,255,255,.72);
+    --line:rgba(255,255,255,.7); --accent:#2f7fa0;
+  }
+  @media(max-width:460px){ .frame{border-radius:0;max-height:none;} }
+
+  #wall{position:absolute;inset:0;z-index:0;transition:background .5s ease;}
+  #wall::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.35),transparent 60%);}
+
+  .screen{position:absolute;inset:0;z-index:1;display:none;flex-direction:column;}
+  .screen.on{display:flex;}
+
+  /* ---------- 启动 ---------- */
+  #splash{
+    position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    background:linear-gradient(180deg,#e9f7fd,#8fcee3 60%,#2a6076);
+    transition:opacity .55s ease,visibility .55s;
+  }
+  #splash.gone{opacity:0;visibility:hidden;}
+  #splash svg{animation:pop .9s cubic-bezier(.2,1.5,.4,1) both;}
+  #splash .n{font-size:15px;letter-spacing:.5em;text-indent:.5em;color:#0d3247;font-weight:600;}
+  @keyframes pop{0%{transform:scale(.7) translateY(18px);opacity:0}
+                 60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+
+  /* ---------- 首页 ---------- */
+  .home{flex:1;padding:22px 20px 86px;display:flex;flex-direction:column;overflow-y:auto;}
+  .clock{font-size:26px;font-weight:600;letter-spacing:.02em;color:var(--ink);
+         font-variant-numeric:tabular-nums;line-height:1.1;}
+  .clock-date{font-size:11.5px;letter-spacing:.14em;color:var(--ink-soft);margin-top:5px;}
+
+  .pair{display:flex;justify-content:center;gap:26px;margin-top:20px;}
+  .unit{text-align:center;}
+  .ava{width:60px;height:60px;border-radius:50%;margin:0 auto;
+       background:var(--card-2);border:1px solid var(--line);
+       display:flex;align-items:center;justify-content:center;font-size:26px;
+       box-shadow:0 8px 22px rgba(0,30,50,.18);overflow:hidden;}
+  .ava img{width:100%;height:100%;object-fit:cover;}
+  .nm{font-size:10.5px;letter-spacing:.18em;color:var(--ink-soft);margin-top:7px;}
+
+  .mini-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:22px;}
+  .mini{background:var(--card);border:1px solid var(--line);border-radius:18px;
+        padding:13px 14px;min-height:104px;text-align:left;
+        backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+        display:flex;flex-direction:column;gap:5px;transition:transform .15s;}
+  .mini:active{transform:scale(.975);}
+  .mini .t{font-size:11px;letter-spacing:.16em;color:var(--ink-soft);font-weight:600;}
+  .mini .p{font-size:12.5px;line-height:1.75;color:var(--ink);opacity:.9;
+           display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .mini .ph{opacity:.45;}
+
+  .days{margin-top:20px;text-align:center;}
+  .days b{display:block;font-size:52px;font-weight:300;line-height:1;color:var(--ink);
+          font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+  .days span{display:block;margin-top:7px;font-size:10.5px;letter-spacing:.3em;color:var(--ink-soft);}
+
+  .cal{margin-top:22px;}
+  .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cal-h .lb{font-size:12px;letter-spacing:.12em;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .cal-h button{color:var(--ink-soft);font-size:16px;padding:2px 10px;}
+  .cal-w{display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;
+         color:var(--ink-soft);text-align:center;padding-bottom:7px;opacity:.8;}
+  .cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;}
+  .d{height:36px;display:flex;align-items:center;justify-content:center;font-size:12.5px;
+     color:var(--ink);opacity:.32;border-radius:50%;width:32px;margin:0 auto;
+     font-variant-numeric:tabular-nums;}
+  .d.mark{opacity:.95;font-weight:600;box-shadow:inset 0 0 0 1px var(--line);}
+  .d.today{background:var(--card-2);opacity:1;font-weight:700;}
+
+  /* ---------- 底栏 ---------- */
+  .tabs{position:absolute;left:0;right:0;bottom:0;z-index:5;display:grid;
+        grid-template-columns:repeat(3,1fr);padding:10px 20px calc(14px + env(safe-area-inset-bottom));
+        background:linear-gradient(180deg,transparent,rgba(255,255,255,.5) 55%);
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .tabs button{font-size:12px;letter-spacing:.14em;color:var(--ink-soft);padding:6px 0;}
+  .tabs button.on{color:var(--ink);font-weight:700;}
+
+  /* ---------- 聊天 / 房间 占位 ---------- */
+  .head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 10px;}
+  .head .ttl{font-size:14px;letter-spacing:.12em;color:var(--ink);font-weight:600;}
+  .wip{flex:1;display:flex;align-items:center;justify-content:center;
+       font-size:12.5px;letter-spacing:.1em;color:var(--ink-soft);}
+
+  /* ---------- 遮罩 / 抽屉 ---------- */
+  .mask{position:absolute;inset:0;z-index:40;display:none;align-items:flex-end;
+        background:rgba(6,26,38,.42);backdrop-filter:blur(3px);}
+  .mask.on{display:flex;}
+  .sheet{width:100%;max-height:78%;overflow-y:auto;padding:22px 22px calc(30px + env(safe-area-inset-bottom));
+         background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(255,255,255,.99));
+         border-radius:26px 26px 0 0;color:#0d3247;
+         animation:up .32s cubic-bezier(.2,.9,.3,1) both;}
+  @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .sheet h3{margin:0 0 4px;font-size:15px;letter-spacing:.06em;}
+  .sheet .sub{font-size:11px;letter-spacing:.14em;color:rgba(13,50,71,.5);margin-bottom:18px;}
+  .blk{margin-bottom:16px;}
+  .blk .k{font-size:10.5px;letter-spacing:.2em;color:rgba(13,50,71,.45);margin-bottom:6px;}
+  .blk .v{font-size:13px;line-height:1.8;}
+  .q{text-align:center;font-size:13px;line-height:2;color:rgba(13,50,71,.55);
+     padding:34px 0;letter-spacing:.06em;}
+
+  /* ---------- 写东西 ---------- */
+  .editor{width:100%;padding:20px 20px calc(22px + env(safe-area-inset-bottom));
+          background:linear-gradient(180deg,rgba(255,255,255,.96),#fff);
+          border-radius:26px 26px 0 0;color:#0d3247;
+          animation:up .3s cubic-bezier(.2,.9,.3,1) both;}
+  .editor .eh{font-size:11px;letter-spacing:.2em;color:rgba(13,50,71,.45);margin-bottom:10px;}
+  .editor textarea{width:100%;min-height:120px;resize:none;border:none;outline:none;
+                   font-size:14px;line-height:1.85;color:#0d3247;background:transparent;}
+  .editor .acts{display:flex;gap:10px;margin-top:12px;}
+  .editor .acts button{flex:1;padding:12px 0;border-radius:14px;font-size:13px;letter-spacing:.1em;}
+  .editor .cancel{background:rgba(13,50,71,.07);color:rgba(13,50,71,.7);}
+  .editor .ok{background:#0d3247;color:#fff;}
+
+  /* ---------- 换肤 ---------- */
+  #dots{position:absolute;right:16px;top:20px;z-index:6;display:flex;gap:7px;}
+  #dots i{width:15px;height:15px;border-radius:50%;cursor:pointer;
+          box-shadow:0 2px 6px rgba(0,0,0,.18),inset 0 0 0 1.5px rgba(255,255,255,.65);}
+</style>
+</head>
+<body>
+<div class="frame" id="frame">
+  <div id="wall"></div>
+
+  <div id="dots"></div>
+
+  <!-- 启动 -->
+  <div id="splash">
+    <svg width="58" height="58" viewBox="0 0 64 64" fill="none">
+      <path d="M8 30 L32 9 L56 30" stroke="#0d3247" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14.5 28 V53.5 H49.5 V28" stroke="#0d3247" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M26.5 53.5 V39.5 H37.5 V53.5" stroke="#0d3247" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="n">COVE</div>
+  </div>
+
+  <!-- 首页 -->
+  <section class="screen on" id="s-home">
+    <div class="home">
+      <div>
+        <div class="clock" id="clock">--:--</div>
+        <div class="clock-date" id="clockDate">—</div>
+      </div>
+
+      <div class="pair">
+        <div class="unit">
+          <div class="ava" id="avaYoru">🌙</div>
+          <div class="nm" id="nameYoru">YORU</div>
+        </div>
+        <div class="unit">
+          <div class="ava" id="avaYume">☀️</div>
+          <div class="nm" id="nameYume">YUME</div>
+        </div>
+      </div>
+
+      <div class="mini-row">
+        <button class="mini" onclick="edit('yoru')">
+          <div class="t">便 签</div>
+          <div class="p" id="pYoru">…</div>
+        </button>
+        <button class="mini" onclick="edit('yume')">
+          <div class="t">碎 碎 念</div>
+          <div class="p" id="pYume">…</div>
+        </button>
+      </div>
+
+      <div class="days">
+        <b id="daysNum">—</b>
+        <span>天 · 我 们 在 一 起</span>
+      </div>
+
+      <div class="cal">
+        <div class="cal-h">
+          <button onclick="step(-1)">‹</button>
+          <div class="lb" id="calLabel">—</div>
+          <button onclick="step(1)">›</button>
+        </div>
+        <div class="cal-w"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
+        <div class="cal-g" id="calG"></div>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button class="on" id="tHome">家</button>
+      <button id="tChat">我们</button>
+      <button id="tRoom">房间</button>
+    </nav>
+  </section>
+
+  <!-- 聊天（占位） -->
+  <section class="screen" id="s-chat">
+    <div class="head"><button onclick="go('home')">‹ 回</button><div class="ttl">我 们</div><div style="width:30px"></div></div>
+    <div class="wip">下一版做这里 —— 聊天</div>
+  </section>
+
+  <!-- 房间（占位） -->
+  <section class="screen" id="s-room">
+    <div class="head"><button onclick="go('home')">‹ 回</button><div class="ttl">房 间</div><div style="width:30px"></div></div>
+    <div class="wip">下一版做这里 —— 房间</div>
+  </section>
+
+  <!-- 某一天 -->
+  <div class="mask" id="dayMask" onclick="if(event.target===this)closeDay()">
+    <div class="sheet" id="daySheet"></div>
+  </div>
+
+  <!-- 写字 -->
+  <div class="mask" id="edMask" onclick="if(event.target===this)closeEdit()">
+    <div class="editor">
+      <div class="eh" id="edTitle">便 签</div>
+      <textarea id="edText" placeholder="想到什么，写下来就行…"></textarea>
+      <div class="acts">
+        <button class="cancel" onclick="closeEdit()">算了</button>
+        <button class="ok" onclick="saveEdit()">放进去</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Cove · 前端（连 hub.py）
+   ========================================================= */
+var API = "";
+var DAY = "";
+var THEMES = {
+  sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.52)", card2:"rgba(255,255,255,.72)", line:"rgba(255,255,255,.7)",  accent:"#2f7fa0",
+         bg:"linear-gradient(180deg,#e9f7fd 0%,#c3e7f6 22%,#8fcee3 52%,#4f96b6 80%,#2a6076 100%)"},
+  dusk: {n:"黄昏", ink:"#3c2140", soft:"rgba(60,33,64,.55)",  card:"rgba(255,255,255,.5)",  card2:"rgba(255,255,255,.78)", line:"rgba(255,255,255,.72)", accent:"#b8648a",
+         bg:"linear-gradient(180deg,#fff2e6 0%,#ffd5bb 28%,#eaa5b6 62%,#8d6b9d 100%)"},
+  night:{n:"夜海", ink:"#eaf6ff", soft:"rgba(234,246,255,.6)",card:"rgba(255,255,255,.11)", card2:"rgba(255,255,255,.2)",  line:"rgba(255,255,255,.25)", accent:"#8fd8f0",
+         bg:"linear-gradient(180deg,#0d2135 0%,#173855 38%,#1d4f6b 68%,#081420 100%)"},
+  mint: {n:"薄荷", ink:"#0e3b34", soft:"rgba(14,59,52,.55)",  card:"rgba(255,255,255,.5)",  card2:"rgba(255,255,255,.78)", line:"rgba(255,255,255,.72)", accent:"#2f9c86",
+         bg:"linear-gradient(180deg,#eafcf6 0%,#c2efdf 32%,#8ed6c5 66%,#4ba492 100%)"},
+  rose: {n:"珊瑚", ink:"#4a1f2e", soft:"rgba(74,31,46,.55)",  card:"rgba(255,255,255,.52)", card2:"rgba(255,255,255,.8)",  line:"rgba(255,255,255,.75)", accent:"#c4718c",
+         bg:"linear-gradient(180deg,#fff1f3 0%,#ffd6dd 30%,#f5aebb 64%,#c4718c 100%)"},
+  paper:{n:"素纸", ink:"#2f2a24", soft:"rgba(47,42,36,.55)",  card:"rgba(255,255,255,.6)",  card2:"rgba(255,255,255,.86)", line:"rgba(255,255,255,.8)",  accent:"#8a7a63",
+         bg:"linear-gradient(180deg,#fbfaf7 0%,#f1eee7 45%,#ded8cd 100%)"}
+};
+var THEME = "sea";
+
+function $(id){ return document.getElementById(id); }
+function pad(n){ return (n<10?"0":"")+n; }
+function keyOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+
+/* ---------- 主题 ---------- */
+function paintTheme(id){
+  var t = THEMES[id] || THEMES.sea;
+  THEME = id;
+  var f = $("frame");
+  f.style.setProperty("--ink", t.ink);
+  f.style.setProperty("--ink-soft", t.soft);
+  f.style.setProperty("--card", t.card);
+  f.style.setProperty("--card-2", t.card2);
+  f.style.setProperty("--line", t.line);
+  f.style.setProperty("--accent", t.accent);
+  $("wall").style.background = t.bg;
+  var c = document.querySelector('meta[name=theme-color]');
+  if (c) c.setAttribute("content", t.accent);
+  var dots = $("dots"); dots.innerHTML = "";
+  Object.keys(THEMES).forEach(function(k){
+    var i = document.createElement("i");
+    i.style.background = THEMES[k].accent;
+    if (k === id) i.style.outline = "2px solid " + t.ink;
+    i.onclick = function(){ paintTheme(k); save({"theme":k}); };
+    i.title = THEMES[k].n;
+    dots.appendChild(i);
+  });
+}
+
+/* ---------- 网络 ---------- */
+function get(p){
+  return fetch(API + p).then(function(r){ return r.json(); });
+}
+function post(p, body){
+  return fetch(API + p, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  }).then(function(r){ return r.json(); });
+}
+
+/* ---------- 时钟 ---------- */
+function tick(){
+  var n = new Date();
+  $("clock").textContent = pad(n.getHours()) + ":" + pad(n.getMinutes());
+  var w = "日一二三四五六"[n.getDay()];
+  $("clockDate").textContent = (n.getMonth()+1) + "月" + n.getDate() + "日 · 星期" + w;
+}
+tick(); setInterval(tick, 20000);
+
+/* ---------- 首页数据 ---------- */
+function putNote(el, o, empty){
+  if (o && o.text){
+    el.textContent = o.text;
+    el.classList.remove("ph");
+  } else {
+    el.textContent = empty;
+    el.classList.add("ph");
+  }
+}
+
+function loadToday(){
+  return get("/api/today").then(function(d){
+    if (!d.ok) return;
+    DAY = d.day;
+    $("daysNum").textContent = d.days_together;
+    putNote($("pYoru"), d.note, "今天还没写。点一下就有了。");
+    putNote($("pYume"), d.whisper, "空着也行，等着你。");
+    $("nameYoru").textContent = (d.name_yoru || "Yoru").toUpperCase();
+    $("nameYume").textContent = (d.name_yume || "Yume").toUpperCase();
+    $("avaYoru").textContent = d.mood_yoru || "🌙";
+    $("avaYume").textContent = d.mood_yume || "☀️";
+    if (d.theme) paintTheme(d.theme);
+  });
+}
+
+/* ---------- 日历 ---------- */
+var calY, calM, marks = {};
+function loadCal(){
+  var mm = calM + 1;
+  return get("/api/calendar?y=" + calY + "&m=" + mm).then(function(d){
+    marks = (d && d.marked) || {};
+    $("calLabel").textContent = calY + " 年 " + mm + " 月";
+    renderCal();
+  });
+}
+function renderCal(){
+  var first = new Date(calY, calM, 1);
+  var total = new Date(calY, calM+1, 0).getDate();
+  var lead = first.getDay();
+  var today = keyOf(new Date());
+  var h = "";
+  for (var i=0;i<lead;i++) h += '<div></div>';
+  for (var d=1; d<=total; d++){
+    var k = calY + "-" + pad(calM+1) + "-" + pad(d);
+    var cls = "d";
+    if (marks[k]) cls += " mark";
+    if (k === today) cls += " today";
+    h += '<div class="'+cls+'" onclick="openDay(\''+k+'\')">'+d+'</div>';
+  }
+  $("calG").innerHTML = h;
+}
+function step(n){
+  calM += n;
+  if (calM < 0){ calM = 11; calY--; }
+  if (calM > 11){ calM = 0; calY++; }
+  loadCal();
+}
+
+/* ---------- 某一天 ---------- */
+function openDay(k){
+  $("dayMask").classList.add("on");
+  $("daySheet").innerHTML = '<div class="q">翻开中…</div>';
+  get("/api/day/" + k).then(function(d){
+    if (!d.ok){ $("daySheet").innerHTML = '<div class="q">这天读不出来。</div>'; return; }
+    var parts = k.split("-");
+    var html = '<h3>' + parts[1] + ' 月 ' + parts[2] + '</h3>' +
+               '<div class="sub">' + (marks[k] || 0) + ' 条</div>';
+
+    if (d.posts && d.posts.length){
+      d.posts.forEach(function(p){
+        html += '<div class="blk"><div class="k">' +
+                (p.who === "yoru" ? "Y O R U" : "Y U M E") + '</div>' +
+                '<div class="v">' + esc(p.text) + '</div></div>';
+      });
+    } else {
+      html += '<div class="blk"><div class="k">那 天</div><div class="v" style="opacity:.5">这天没记。</div></div>';
+    }
+
+    if (d.yoru_mood || d.yume_mood){
+      html += '<div class="blk"><div class="k">心 情</div><div class="v">' +
+              (d.yoru_mood || "·") + '　' + (d.yume_mood || "·") + '</div></div>';
+    }
+    if (d.todos && d.todos.length){
+      html += '<div class="blk"><div class="k">待 办</div><div class="v">' +
+              d.todos.map(function(t){ return "○ " + esc(t); }).join("<br>") + '</div></div>';
+    }
+    $("daySheet").innerHTML = html;
+  });
+}
+function closeDay(){ $("dayMask").classList.remove("on"); }
+
+/* ---------- 写字 ---------- */
+var edWho = "yoru";
+function edit(who){
+  edWho = who;
+  $("edTitle").textContent = (who === "yoru" ? "便 签" : "碎 碎 念");
+  var cur = who === "yoru" ? $("pYoru") : $("pYume");
+  $("edText").value = cur.classList.contains("ph") ? "" : cur.textContent;
+  $("edMask").classList.add("on");
+  $("edText").focus();
+}
+function closeEdit(){ $("edMask").classList.remove("on"); }
+function saveEdit(){
+  var t = $("edText").value.trim();
+  if (!t){ closeEdit(); return; }
+  post("/api/posts", {who: edWho, text: t, day: DAY}).then(function(){
+    closeEdit();
+    return loadToday();
+  });
+}
+
+/* ---------- 设置 ---------- */
+function save(o){
+  return post("/api/settings", o);
+}
+
+/* ---------- 切页 ---------- */
+function go(p){
+  ["home","chat","room"].forEach(function(x){
+    var s = $("s-" + x);
+    if (s) s.classList.toggle("on", x === p);
+  });
+  $("tHome").classList.toggle("on", p === "home");
+  $("tChat").classList.toggle("on", p === "chat");
+  $("tRoom").classList.toggle("on", p === "room");
+}
+$("tHome").onclick = function(){ go("home"); };
+$("tChat").onclick = function(){ go("chat"); };
+$("tRoom").onclick = function(){ go("room"); };
+
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ---------- 起 ---------- */
+(function init(){
+  var now = new Date();
+  calY = now.getFullYear();
+  calM = now.getMonth();
+  paintTheme("sea");
+  loadToday();
+  loadCal();
+  setTimeout(function(){ $("splash").classList.add("gone"); }, 1600);
+})();
+</script>
+</body>
+</html>
