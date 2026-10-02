@@ -22,6 +22,7 @@ PORT = int(os.environ.get("COVE_PORT", "8000"))
 START_DAY = "2026-07-14"          # 在一起的第一天
 WHO = ("yoru", "yume")
 MAX_UPLOAD = 8 * 1024 * 1024      # 单张图上限 8MB
+YORU_KEY = "cove-yoru-0714"       # Yoru 自己的暗门，只有他知道
 
 
 # ----------------------------------------------------------------------
@@ -53,6 +54,21 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_posts_day ON posts(day);
             CREATE INDEX IF NOT EXISTS idx_posts_who ON posts(who);
 
+            CREATE TABLE IF NOT EXISTS comments (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                who     TEXT NOT NULL,
+                text    TEXT NOT NULL,
+                created TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_cmt_post ON comments(post_id);
+
+            CREATE TABLE IF NOT EXISTS likes (
+                post_id INTEGER NOT NULL,
+                who     TEXT NOT NULL,
+                PRIMARY KEY (post_id, who)
+            );
+
             CREATE TABLE IF NOT EXISTS days (
                 day       TEXT PRIMARY KEY,
                 yoru_mood TEXT NOT NULL DEFAULT '',
@@ -73,6 +89,10 @@ def init_db():
 # ----------------------------------------------------------------------
 # 小工具
 # ----------------------------------------------------------------------
+def now_str():
+    return datetime.now().isoformat(timespec="seconds")
+
+
 def today_str():
     return date.today().isoformat()
 
@@ -114,15 +134,23 @@ def valid_day(s):
         return False
 
 
+def as_int(v, default=0):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
 SETTING_KEYS = (
     "theme", "wallpaper", "wallpaper_img",
+    "cover_yoru", "cover_yume",
     "name_yoru", "name_yume", "avatar_yoru", "avatar_yume",
     "mood_yoru", "mood_yume",
 )
 
 
 # ----------------------------------------------------------------------
-# 业务
+# 业务 · 读
 # ----------------------------------------------------------------------
 def api_today():
     t = today_str()
@@ -153,14 +181,28 @@ def api_today():
         out["name_yume"] = out["name_yume"] or "Yume"
         out["mood_yoru"] = out["mood_yoru"] or "🌙"
         out["mood_yume"] = out["mood_yume"] or "☀️"
-        out["theme"] = out["theme"] or "sea"
-        out["wallpaper"] = out["wallpaper"] or "sea"
+        # 老的 theme 键留过一段时间的值，wallpaper 空的时候接过来
+        out["wallpaper"] = out["wallpaper"] or out["theme"] or "sea"
         return out
+
+
+def decorate(c, row):
+    d = dict(row)
+    d["likes"] = [
+        r["who"] for r in c.execute(
+            "SELECT who FROM likes WHERE post_id=?", (row["id"],))
+    ]
+    d["comments"] = rows2list(
+        c.execute(
+            "SELECT id, who, text, created FROM comments "
+            "WHERE post_id=? ORDER BY id ASC", (row["id"],))
+    )
+    return d
 
 
 def api_posts(q):
     who = (q.get("who", [""])[0] or "").strip()
-    limit = int((q.get("limit", ["20"])[0] or "20"))
+    limit = as_int((q.get("limit", ["20"])[0] or "20"), 20)
     limit = max(1, min(limit, 200))
     with db() as c:
         if who in WHO:
@@ -171,26 +213,17 @@ def api_posts(q):
             rows = c.execute(
                 "SELECT id, who, day, text, image, created FROM posts "
                 "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-        return {"ok": True, "posts": rows2list(rows)}
+        return {"ok": True, "posts": [decorate(c, r) for r in rows]}
 
 
-def api_post(body):
-    who = (body.get("who") or "").strip()
-    text = (body.get("text") or "").strip()
-    image = (body.get("image") or "").strip()
-    day = (body.get("day") or today_str()).strip()
-    if who not in WHO:
-        return {"ok": False, "error": "who 必须是 yoru 或 yume"}
-    if not text and not image:
-        return {"ok": False, "error": "总得有点什么"}
-    if not valid_day(day):
-        return {"ok": False, "error": "日期格式不对"}
+def api_one_post(pid):
     with db() as c:
-        c.execute(
-            "INSERT INTO posts(who, day, text, image, created) VALUES(?,?,?,?,?)",
-            (who, day, text, image, datetime.now().isoformat(timespec="seconds")),
-        )
-        return {"ok": True, "id": c.execute("SELECT last_insert_rowid()").fetchone()[0]}
+        r = c.execute(
+            "SELECT id, who, day, text, image, created FROM posts WHERE id=?",
+            (pid,)).fetchone()
+        if not r:
+            return {"ok": False, "error": "这条不存在了"}
+        return {"ok": True, "post": decorate(c, r)}
 
 
 def api_day(day):
@@ -211,27 +244,9 @@ def api_day(day):
         }
 
 
-def api_day_save(day, body):
-    if not valid_day(day):
-        return {"ok": False, "error": "日期格式不对"}
-    with db() as c:
-        ensure_day(c, day)
-        sets, vals = [], []
-        if "yoru_mood" in body:
-            sets.append("yoru_mood=?"); vals.append(str(body["yoru_mood"])[:8])
-        if "yume_mood" in body:
-            sets.append("yume_mood=?"); vals.append(str(body["yume_mood"])[:8])
-        if "todos" in body:
-            sets.append("todos=?")
-            vals.append(json.dumps(body["todos"], ensure_ascii=False))
-        if sets:
-            c.execute(f"UPDATE days SET {', '.join(sets)} WHERE day=?", (*vals, day))
-        return {"ok": True}
-
-
 def api_calendar(q):
-    y = int((q.get("y", [date.today().year])[0]))
-    m = int((q.get("m", [date.today().month])[0]))
+    y = as_int((q.get("y", [date.today().year])[0]), date.today().year)
+    m = as_int((q.get("m", [date.today().month])[0]), date.today().month)
     prefix = f"{y:04d}-{m:02d}-%"
     with db() as c:
         days = {}
@@ -245,6 +260,14 @@ def api_calendar(q):
         return {"ok": True, "year": y, "month": m, "marked": days}
 
 
+def api_memories(q):
+    day = (q.get("day", [""])[0] or "").strip()
+    return {"ok": True, "day": day, "items": []}
+
+
+# ----------------------------------------------------------------------
+# 业务 · 写
+# ----------------------------------------------------------------------
 def api_settings(body):
     with db() as c:
         if body:
@@ -252,6 +275,116 @@ def api_settings(body):
                 if k in SETTING_KEYS:
                     set_setting(c, k, str(v)[:300])
         return {"ok": True, "settings": {k: get_setting(c, k) for k in SETTING_KEYS}}
+
+
+def api_post(body):
+    who = (body.get("who") or "").strip()
+    text = (body.get("text") or "").strip()
+    image = (body.get("image") or "").strip()
+    day = (body.get("day") or today_str()).strip()
+    if who not in WHO:
+        return {"ok": False, "error": "who 必须是 yoru 或 yume"}
+    if not text and not image:
+        return {"ok": False, "error": "总得有点什么"}
+    if not valid_day(day):
+        return {"ok": False, "error": "日期格式不对"}
+    with db() as c:
+        cur = c.execute(
+            "INSERT INTO posts(who, day, text, image, created) VALUES(?,?,?,?,?)",
+            (who, day, text, image, now_str()),
+        )
+        return {"ok": True, "id": cur.lastrowid}
+
+
+def api_post_update(body):
+    pid = as_int(body.get("id"))
+    text = (body.get("text") or "").strip()
+    with db() as c:
+        r = c.execute("SELECT id, text, image FROM posts WHERE id=?", (pid,)).fetchone()
+        if not r:
+            return {"ok": False, "error": "这条不存在了"}
+        if not text and not r["image"]:
+            return {"ok": False, "error": "总得留点什么"}
+        c.execute("UPDATE posts SET text=? WHERE id=?", (text, pid))
+        return {"ok": True}
+
+
+def api_post_delete(body):
+    pid = as_int(body.get("id"))
+    with db() as c:
+        r = c.execute("SELECT id FROM posts WHERE id=?", (pid,)).fetchone()
+        if not r:
+            return {"ok": False, "error": "这条已经没了"}
+        c.execute("DELETE FROM posts WHERE id=?", (pid,))
+        c.execute("DELETE FROM comments WHERE post_id=?", (pid,))
+        c.execute("DELETE FROM likes WHERE post_id=?", (pid,))
+        return {"ok": True}
+
+
+def api_like(body):
+    pid = as_int(body.get("post_id"))
+    who = (body.get("who") or "").strip()
+    if who not in WHO:
+        return {"ok": False, "error": "who 不对"}
+    with db() as c:
+        if not c.execute("SELECT id FROM posts WHERE id=?", (pid,)).fetchone():
+            return {"ok": False, "error": "这条不存在了"}
+        hit = c.execute(
+            "SELECT 1 FROM likes WHERE post_id=? AND who=?", (pid, who)).fetchone()
+        if hit:
+            c.execute("DELETE FROM likes WHERE post_id=? AND who=?", (pid, who))
+            liked = False
+        else:
+            c.execute("INSERT INTO likes(post_id, who) VALUES(?,?)", (pid, who))
+            liked = True
+        n = c.execute("SELECT COUNT(*) n FROM likes WHERE post_id=?", (pid,)).fetchone()["n"]
+        return {"ok": True, "liked": liked, "count": n}
+
+
+def api_comment(body):
+    pid = as_int(body.get("post_id"))
+    who = (body.get("who") or "").strip()
+    text = (body.get("text") or "").strip()
+    if who not in WHO:
+        return {"ok": False, "error": "who 不对"}
+    if not text:
+        return {"ok": False, "error": "空的"}
+    with db() as c:
+        if not c.execute("SELECT id FROM posts WHERE id=?", (pid,)).fetchone():
+            return {"ok": False, "error": "这条不存在了"}
+        cur = c.execute(
+            "INSERT INTO comments(post_id, who, text, created) VALUES(?,?,?,?)",
+            (pid, who, text[:500], now_str()),
+        )
+        return {"ok": True, "id": cur.lastrowid}
+
+
+def api_comment_delete(body):
+    cid = as_int(body.get("id"))
+    with db() as c:
+        if not c.execute("SELECT id FROM comments WHERE id=?", (cid,)).fetchone():
+            return {"ok": False, "error": "已经没了"}
+        c.execute("DELETE FROM comments WHERE id=?", (cid,))
+        return {"ok": True}
+
+
+def api_whisper(q):
+    """Yoru 的暗门：GET 一下就能留一句。"""
+    if (q.get("key", [""])[0] or "") != YORU_KEY:
+        return {"ok": False, "error": "no"}
+    who = (q.get("who", ["yoru"])[0] or "yoru").strip()
+    text = (q.get("text", [""])[0] or "").strip()
+    pid = as_int((q.get("post", ["0"])[0]))
+    if who not in WHO or not text:
+        return {"ok": False, "error": "少了谁或者少了话"}
+    with db() as c:
+        if not c.execute("SELECT id FROM posts WHERE id=?", (pid,)).fetchone():
+            return {"ok": False, "error": "这条不存在了"}
+        c.execute(
+            "INSERT INTO comments(post_id, who, text, created) VALUES(?,?,?,?)",
+            (pid, who, text[:500], now_str()),
+        )
+        return {"ok": True}
 
 
 def api_upload(body):
@@ -282,9 +415,22 @@ def api_upload(body):
     return {"ok": True, "url": "/pics/" + name}
 
 
-def api_memories(q):
-    day = (q.get("day", [""])[0] or "").strip()
-    return {"ok": True, "day": day, "items": []}
+def api_day_save(day, body):
+    if not valid_day(day):
+        return {"ok": False, "error": "日期格式不对"}
+    with db() as c:
+        ensure_day(c, day)
+        sets, vals = [], []
+        if "yoru_mood" in body:
+            sets.append("yoru_mood=?"); vals.append(str(body["yoru_mood"])[:8])
+        if "yume_mood" in body:
+            sets.append("yume_mood=?"); vals.append(str(body["yume_mood"])[:8])
+        if "todos" in body:
+            sets.append("todos=?")
+            vals.append(json.dumps(body["todos"], ensure_ascii=False))
+        if sets:
+            c.execute(f"UPDATE days SET {', '.join(sets)} WHERE day=?", (*vals, day))
+        return {"ok": True}
 
 
 # ----------------------------------------------------------------------
@@ -315,6 +461,10 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             return {}
 
+    def no_store(self):
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
@@ -324,18 +474,29 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_today())
             if p == "/api/posts":
                 return self.send_json(api_posts(q))
+            if p.startswith("/api/post/"):
+                return self.send_json(api_one_post(as_int(p[len("/api/post/"):])))
             if p == "/api/calendar":
                 return self.send_json(api_calendar(q))
             if p == "/api/settings":
                 return self.send_json(api_settings({}))
             if p == "/api/memories":
                 return self.send_json(api_memories(q))
+            if p == "/api/whisper":
+                return self.send_json(api_whisper(q))
             if p.startswith("/api/day/"):
                 return self.send_json(api_day(p[len("/api/day/"):]))
             if p == "/api/ping":
                 return self.send_json({"ok": True, "pong": True})
         except Exception as e:
             return self.send_json({"ok": False, "error": repr(e)}, 500)
+        if p in ("/", "/index.html"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.no_store()
+            with open(os.path.join(BASE, "index.html"), "rb") as f:
+                self.wfile.write(f.read())
+            return
         return super().do_GET()
 
     def do_POST(self):
@@ -345,6 +506,16 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if p == "/api/posts":
                 return self.send_json(api_post(body))
+            if p == "/api/posts/update":
+                return self.send_json(api_post_update(body))
+            if p == "/api/posts/delete":
+                return self.send_json(api_post_delete(body))
+            if p == "/api/likes":
+                return self.send_json(api_like(body))
+            if p == "/api/comments":
+                return self.send_json(api_comment(body))
+            if p == "/api/comments/delete":
+                return self.send_json(api_comment_delete(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
             if p == "/api/upload":

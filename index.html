@@ -15,8 +15,8 @@
          border-radius:44px;overflow:hidden;background:#0b2434;
          box-shadow:0 40px 120px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.07);
          --ink:#0d3247; --soft:rgba(13,50,71,.55);
-         --card:rgba(255,255,255,.5); --card2:rgba(255,255,255,.72);
-         --line:rgba(255,255,255,.72); --accent:#2f7fa0;}
+         --card:rgba(255,255,255,.34); --card2:rgba(255,255,255,.55);
+         --line:rgba(255,255,255,.7); --accent:#2f7fa0;}
   @media(max-width:460px){ .phone{border-radius:0;max-height:none;} }
 
   #wall{position:absolute;inset:0;z-index:0;transition:background .5s ease;}
@@ -37,7 +37,7 @@
   #splash .house{animation:pop 1s cubic-bezier(.2,1.6,.4,1) both;}
   @keyframes pop{0%{transform:scale(.6) translateY(24px);opacity:0}
                  55%{transform:scale(1.12)}78%{transform:scale(.98)}100%{transform:scale(1);opacity:1}}
-  #splash .wm{font-size:14px;letter-spacing:.55em;text-indent:.55em;font-weight:700;
+  #splash .wm{font-size:19px;letter-spacing:.3em;text-indent:.3em;font-weight:700;
               animation:fade .8s .35s both;}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -52,14 +52,12 @@
        display:flex;align-items:center;justify-content:center;font-size:26px;
        box-shadow:0 8px 20px rgba(0,30,50,.16);}
   .ava img{width:100%;height:100%;object-fit:cover;display:block;}
-  .nm{margin-top:7px;font-size:14px;font-weight:800;font-style:italic;
-      font-family:"Segoe Script","Bradley Hand",cursive,sans-serif;
-      color:var(--ink);letter-spacing:.02em;}
+  .nm{margin-top:7px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.02em;}
 
   .two{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:22px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:13px 14px;
         min-height:108px;text-align:left;display:flex;flex-direction:column;gap:6px;
-        backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:transform .16s;}
+        transition:transform .16s;}
   .card:active{transform:scale(.97);}
   .card .t{font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--soft);}
   .card .p{font-size:12.5px;line-height:1.7;color:var(--ink);
@@ -70,7 +68,7 @@
   .days{margin-top:24px;text-align:center;}
   .rollbox{height:58px;overflow:hidden;position:relative;}
   .roll{display:block;font-size:52px;font-weight:300;line-height:58px;color:var(--ink);
-        font-variant-numeric:tabular-nums;animation:rollup .9s cubic-bezier(.2,.9,.3,1) both;}
+        animation:rollup .9s cubic-bezier(.2,.9,.3,1) both;}
   @keyframes rollup{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
   .days .lb{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.3em;color:var(--soft);}
 
@@ -87,37 +85,25 @@
   .d.mark{opacity:.95;font-weight:600;box-shadow:inset 0 0 0 1px var(--line);}
   .d.today{background:var(--card2);opacity:1;font-weight:700;}
 
-  .tabs{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);
+  .tabs{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(2,1fr);
         padding:10px 20px calc(14px + env(safe-area-inset-bottom));
-        background:linear-gradient(180deg,transparent,rgba(255,255,255,.42) 60%);
-        backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-  .tabs button{font-size:12px;letter-spacing:.16em;color:var(--soft);padding:6px 0;}
-  .tabs button.on{color:var(--ink);font-weight:800;}
+        background:linear-gradient(180deg,transparent,rgba(255,255,255,.34) 70%);}
+  .tabs button{font-size:12.5px;letter-spacing:.18em;color:var(--ink);padding:8px 0;opacity:.82;}
 
   .bar{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;gap:10px;}
   .bar .ttl{font-size:14px;letter-spacing:.14em;font-weight:700;color:var(--ink);flex:1;text-align:center;}
   .bar .ic{width:34px;height:34px;display:flex;align-items:center;justify-content:center;
-           font-size:15px;color:var(--soft);}
+           font-size:15px;color:var(--ink);opacity:.85;}
+  .bar .ok{font-size:13px;letter-spacing:.12em;color:var(--ink);font-weight:700;padding:6px 4px;}
 
-  .post{background:var(--card);border:1px solid var(--line);border-radius:16px;
-        padding:14px 15px;margin-bottom:11px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
-  .post .hd{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.14em;
-            color:var(--soft);margin-bottom:8px;}
-  .post .tx{font-size:13px;line-height:1.8;color:var(--ink);white-space:pre-wrap;word-break:break-word;}
-  .post img{width:100%;border-radius:12px;margin-top:9px;display:block;}
+  .chat-who{flex:1;display:flex;align-items:center;gap:9px;min-width:0;}
+  .ava.sm{width:32px;height:32px;font-size:15px;margin:0;box-shadow:none;flex:none;}
+  .chat-who .ttl{text-align:left;font-size:13.5px;letter-spacing:.06em;}
+
   .empty{text-align:center;padding:60px 0;font-size:12.5px;letter-spacing:.1em;color:var(--soft);opacity:.7;}
 
-  .composer{display:flex;gap:9px;align-items:flex-end;padding:12px 20px calc(16px + env(safe-area-inset-bottom));}
-  .composer textarea{flex:1;min-height:42px;max-height:120px;resize:none;border:1px solid var(--line);
-        border-radius:14px;padding:11px 13px;font-size:13.5px;line-height:1.6;color:var(--ink);
-        background:var(--card2);outline:none;}
-  .composer .send{padding:0 18px;height:42px;border-radius:14px;background:var(--ink);color:#fff;
-        font-size:13px;letter-spacing:.08em;}
-  .composer .photo{width:42px;height:42px;border-radius:14px;border:1px solid var(--line);
-        background:var(--card2);font-size:17px;display:flex;align-items:center;justify-content:center;}
-
   .blk{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 15px;
-       margin-bottom:11px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+       margin-bottom:11px;}
   .blk .k{font-size:10.5px;letter-spacing:.2em;color:var(--soft);margin-bottom:8px;}
   .blk .v{font-size:13px;line-height:1.8;color:var(--ink);}
   .blk .v img{width:100%;border-radius:12px;margin-top:8px;}
@@ -129,14 +115,15 @@
   .bub.me{align-self:flex-end;background:var(--accent);color:#fff;}
   .inputbar{display:flex;gap:9px;align-items:flex-end;padding:10px 16px calc(14px + env(safe-area-inset-bottom));
             border-top:1px solid var(--line);}
-  .inputbar textarea{flex:1;min-height:40px;max-height:110px;resize:none;border:none;outline:none;
-        background:var(--card2);border-radius:14px;padding:10px 13px;font-size:13.5px;color:var(--ink);}
-  .inputbar .rd{width:40px;height:40px;border-radius:50%;background:var(--card2);
+  .inputbar textarea{flex:1;min-height:40px;max-height:110px;resize:none;border:1px solid var(--line);
+        outline:none;background:var(--card2);border-radius:14px;padding:10px 13px;
+        font-size:13.5px;color:var(--ink);}
+  .inputbar textarea::placeholder{color:var(--soft);}
+  .inputbar .rd{width:40px;height:40px;border-radius:50%;background:var(--card2);flex:none;
         display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink);}
 
   .rooms{display:flex;flex-direction:column;gap:13px;margin-top:6px;}
-  .room{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 17px;
-        backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+  .room{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 17px;}
   .room h3{margin:0 0 11px;font-size:13.5px;letter-spacing:.06em;color:var(--ink);font-weight:700;}
   .item{display:flex;align-items:center;gap:10px;padding:11px 0;font-size:13.5px;color:var(--ink);
         border-top:1px solid var(--line);width:100%;text-align:left;}
@@ -144,20 +131,75 @@
   .item .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.6;flex:none;}
   .item .arw{margin-left:auto;color:var(--soft);font-size:15px;}
 
+  /* 朋友圈 */
+  .cover{position:relative;height:158px;flex:none;background:var(--card2);
+         background-size:cover;background-position:center;}
+  .cover .ctop{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+               padding:16px 14px;}
+  .cover .ctop button{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;
+                      justify-content:center;font-size:15px;color:#fff;
+                      background:rgba(10,20,28,.28);}
+  .cover .cbtm{position:absolute;left:20px;bottom:12px;color:#fff;font-size:15px;font-weight:700;
+               letter-spacing:.1em;text-shadow:0 1px 8px rgba(0,0,0,.5);}
+
+  .fb{background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:13px 14px;margin-bottom:11px;}
+  .fb-h{display:flex;align-items:center;gap:9px;}
+  .fava{width:32px;height:32px;border-radius:50%;overflow:hidden;flex:none;background:var(--card2);
+        display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .fava img{width:100%;height:100%;object-fit:cover;display:block;}
+  .fb-name{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .fb .dots{margin-left:auto;color:var(--ink);opacity:.5;font-size:17px;padding:0 4px;line-height:1;}
+  .fb-tx{font-size:13.5px;line-height:1.85;color:var(--ink);margin-top:9px;
+         white-space:pre-wrap;word-break:break-word;}
+  .fb .pic{width:100%;border-radius:12px;margin-top:9px;display:block;}
+  .fb-f{display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11.5px;color:var(--soft);}
+  .fb-f button{font-size:11.5px;letter-spacing:.04em;color:var(--soft);}
+  .fb-f button.on{color:var(--accent);font-weight:700;}
+  .fb-f .tm{opacity:.75;}
+  .cmts{margin-top:9px;border-top:1px solid var(--line);padding-top:8px;
+        display:flex;flex-direction:column;gap:5px;}
+  .cmt{font-size:12px;line-height:1.65;color:var(--ink);word-break:break-word;}
+  .cmt b{font-weight:700;margin-right:5px;}
+  .cmt.mine{opacity:.85;}
+
+  .editbox{width:100%;min-height:170px;border:none;outline:none;background:transparent;
+           font-size:14.5px;line-height:1.95;color:var(--ink);resize:none;padding:6px 0;}
+  .editbox::placeholder{color:var(--soft);opacity:.6;}
+  .editpic img{width:100%;border-radius:14px;display:block;margin-bottom:10px;}
+  .ghost{width:100%;padding:13px 0;border-radius:14px;border:1px solid var(--line);
+         background:var(--card);font-size:13px;letter-spacing:.06em;color:var(--ink);margin-top:6px;}
+
   .mask{position:absolute;inset:0;z-index:70;display:none;align-items:flex-end;
-        background:rgba(5,20,30,.45);backdrop-filter:blur(3px);}
+        background:rgba(5,20,30,.42);}
   .mask.on{display:flex;}
   .sheet{width:100%;background:#fff;color:#0d3247;border-radius:26px 26px 0 0;
          padding:22px 22px calc(28px + env(safe-area-inset-bottom));max-height:82%;overflow-y:auto;
          animation:up .3s cubic-bezier(.2,.9,.3,1) both;}
   @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
   .sheet h4{margin:0 0 14px;font-size:14px;letter-spacing:.06em;}
+  .sheet textarea{width:100%;min-height:74px;resize:none;border:1px solid rgba(13,50,71,.16);
+        border-radius:14px;padding:12px 13px;font-size:13.5px;line-height:1.7;color:#0d3247;
+        background:rgba(13,50,71,.04);outline:none;}
   .wps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .wp{height:74px;border-radius:14px;cursor:pointer;border:2px solid transparent;}
   .wp.sel{border-color:#0d3247;}
   .wp-lb{font-size:10px;text-align:center;color:rgba(13,50,71,.5);margin-top:5px;letter-spacing:.1em;}
   .bigbtn{width:100%;padding:13px 0;border-radius:14px;background:rgba(13,50,71,.07);
           font-size:13.5px;color:#0d3247;margin-top:12px;}
+
+  .popmask{position:absolute;inset:0;z-index:60;display:none;}
+  .popmask.on{display:block;}
+  .pop{position:absolute;z-index:61;display:none;flex-direction:column;min-width:118px;
+       background:rgba(18,24,30,.94);border-radius:13px;padding:5px;
+       box-shadow:0 12px 34px rgba(0,0,0,.45);}
+  .pop.on{display:flex;}
+  .pop button{color:#fff;font-size:13px;padding:10px 14px;text-align:left;
+              letter-spacing:.04em;border-radius:9px;white-space:nowrap;}
+  .pop button:active{background:rgba(255,255,255,.13);}
+  .pop .warn{color:#ff9c9c;}
+  .pop .hd{color:rgba(255,255,255,.62);font-size:11.5px;padding:9px 14px 7px;letter-spacing:.04em;
+           white-space:normal;max-width:190px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -177,6 +219,7 @@
     <div class="wm" id="splashName">COVE</div>
   </div>
 
+  <!-- ══════════ 家 ══════════ -->
   <section class="page on" id="p-home">
     <div class="scroll">
       <div class="time" id="time">--:--</div>
@@ -221,20 +264,82 @@
     </div>
   </section>
 
-  <section class="page" id="p-feed">
+  <!-- ══════════ 私语 ══════════ -->
+  <section class="page" id="p-chat">
     <div class="bar">
       <button class="ic" onclick="go('home')">‹</button>
-      <div class="ttl" id="feedTitle">便签</div>
-      <button class="ic" onclick="openWall()">🎨</button>
+      <div class="chat-who">
+        <div class="ava sm" data-who="yoru" id="chatAva"></div>
+        <div class="ttl" id="chatName">Yoru</div>
+      </div>
+      <div style="display:flex">
+        <button class="ic" onclick="toast('电话还没接上')">☆</button>
+        <button class="ic" onclick="toast('设置还没做')">☰</button>
+      </div>
     </div>
-    <div class="scroll" id="feedList"></div>
-    <div class="composer">
-      <button class="photo" onclick="pickPic()">🖼</button>
-      <textarea id="feedInput" rows="1" placeholder="写点什么…"></textarea>
-      <button class="send" onclick="sendPost()">发</button>
+    <div class="msgs" id="msgs"><div class="empty">还没接上。等我把嘴接过来。</div></div>
+    <div class="inputbar">
+      <button class="rd" onclick="toast('加号面板还没做')">＋</button>
+      <textarea id="chatInput" rows="1" placeholder="说点什么…"></textarea>
+      <button class="rd" onclick="toast('语音还没接上')">🎤</button>
     </div>
   </section>
 
+  <!-- ══════════ 云层 ══════════ -->
+  <section class="page" id="p-room">
+    <div class="bar"><button class="ic" onclick="go('home')">‹</button><div class="ttl">云 层</div><div class="ic"></div></div>
+    <div class="scroll">
+      <div class="rooms">
+        <div class="room">
+          <h3>☁️ Yoru&#39;s Space</h3>
+          <button class="item" onclick="toast('记忆星河还没搬进来')"><span class="dot"></span>记忆星河<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>拾贝工坊<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>MCP<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>Skill<span class="arw">›</span></button>
+        </div>
+        <div class="room">
+          <h3>🍤 Yume&#39;s Space</h3>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>潮汐捕梦<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>你的侧写<span class="arw">›</span></button>
+          <button class="item" onclick="toast('你的日记 —— 只存，我不读')"><span class="dot"></span>Diary<span class="arw">›</span></button>
+        </div>
+        <div class="room">
+          <h3>🏖 Cove 之湾</h3>
+          <button class="item" onclick="openWall()"><span class="dot"></span>Appearance<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>Settings<span class="arw">›</span></button>
+          <button class="item" onclick="toast('还没做')"><span class="dot"></span>Logs<span class="arw">›</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 朋友圈（碎碎念 / 便签） ══════════ -->
+  <section class="page" id="p-feed">
+    <div class="cover" id="feedCover" onclick="pickCover()">
+      <div class="ctop">
+        <button onclick="event.stopPropagation();go('home')">‹</button>
+        <button onclick="event.stopPropagation();openEdit(0)">📷</button>
+      </div>
+      <div class="cbtm" id="feedTitle">碎碎念</div>
+    </div>
+    <div class="scroll" id="feedList" style="padding-top:14px;"></div>
+  </section>
+
+  <!-- ══════════ 写 / 改 ══════════ -->
+  <section class="page" id="p-edit">
+    <div class="bar">
+      <button class="ic" onclick="closeEdit()">‹</button>
+      <div class="ttl" id="editTitle">写一句</div>
+      <button class="ok" onclick="saveEdit()">确认</button>
+    </div>
+    <div class="scroll">
+      <textarea class="editbox" id="editText" placeholder="写点什么…"></textarea>
+      <div class="editpic" id="editPic"></div>
+      <button class="ghost" onclick="pickEditPic()">加一张图</button>
+    </div>
+  </section>
+
+  <!-- ══════════ 那天 ══════════ -->
   <section class="page" id="p-day">
     <div class="bar">
       <button class="ic" onclick="go('home')">‹</button>
@@ -244,55 +349,10 @@
     <div class="scroll" id="dayBody"></div>
   </section>
 
-  <section class="page" id="p-chat">
-    <div class="bar">
-      <button class="ic" onclick="go('home')">‹</button>
-      <div class="ttl" id="chatName">Yoru</div>
-      <div style="display:flex">
-        <button class="ic" onclick="toast('电话还没接上')">📞</button>
-        <button class="ic" onclick="toast('设置还没做')">⚙︎</button>
-      </div>
-    </div>
-    <div class="msgs" id="msgs"></div>
-    <div class="inputbar">
-      <button class="rd" onclick="toast('模型选择还没做')">🌊</button>
-      <textarea id="chatInput" rows="1" placeholder="和 Yoru 说点什么…"></textarea>
-      <button class="rd" onclick="toast('加号面板还没做')">＋</button>
-      <button class="rd" onclick="toast('聊天还没接上模型')">↑</button>
-    </div>
-  </section>
-
-  <section class="page" id="p-room">
-    <div class="bar"><button class="ic" onclick="go('home')">‹</button><div class="ttl">房 间</div><div class="ic"></div></div>
-    <div class="scroll">
-      <div class="rooms">
-        <div class="room">
-          <h3>☁️ Yoru 的房间</h3>
-          <button class="item" onclick="toast('记忆星河还没搬进来')"><span class="dot"></span>记忆星河<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>工作台<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>MCP<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>Skill<span class="arw">›</span></button>
-        </div>
-        <div class="room">
-          <h3>🍤 Yume 的房间</h3>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>我记的你<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>你的档案<span class="arw">›</span></button>
-          <button class="item" onclick="toast('你的日记 —— 只存，我不读')"><span class="dot"></span>你的日记<span class="arw">›</span></button>
-        </div>
-        <div class="room">
-          <h3>🏖 这间屋子</h3>
-          <button class="item" onclick="openWall()"><span class="dot"></span>样子<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>里子<span class="arw">›</span></button>
-          <button class="item" onclick="toast('还没做')"><span class="dot"></span>账本<span class="arw">›</span></button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <nav class="tabs">
-    <button class="on" id="t-home" onclick="go('home')">家</button>
-    <button id="t-chat" onclick="go('chat')">我们</button>
-    <button id="t-room" onclick="go('room')">房间</button>
+  <!-- 底栏：只在「家」出现 -->
+  <nav class="tabs" id="tabs">
+    <button onclick="go('chat')">私 语</button>
+    <button onclick="go('room')">云 层</button>
   </nav>
 
   <div class="mask" id="wallMask" onclick="if(event.target===this)closeWall()">
@@ -304,23 +364,34 @@
     </div>
   </div>
 
+  <div class="mask" id="cmtMask" onclick="if(event.target===this)closeCmt()">
+    <div class="sheet">
+      <h4 id="cmtTitle">说一句</h4>
+      <textarea id="cmtText" placeholder="…"></textarea>
+      <button class="bigbtn" onclick="sendCmt()">发</button>
+    </div>
+  </div>
+
+  <div class="popmask" id="popMask" onclick="closePop()"></div>
+  <div class="pop" id="pop"></div>
+
   <input type="file" id="filePick" accept="image/*" hidden>
 </div>
 
 <script>
 var S = {};
 var THEMES = {
-  sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.5)",  card2:"rgba(255,255,255,.72)", line:"rgba(255,255,255,.72)", accent:"#2f7fa0",
+  sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.54)", line:"rgba(255,255,255,.66)", accent:"#2f7fa0",
          bg:"linear-gradient(180deg,#e9f7fd,#c3e7f6 22%,#8fcee3 52%,#4f96b6 80%,#2a6076)"},
-  dusk: {n:"黄昏", ink:"#3c2140", soft:"rgba(60,33,64,.55)", card:"rgba(255,255,255,.5)",  card2:"rgba(255,255,255,.78)", line:"rgba(255,255,255,.74)", accent:"#b8648a",
+  dusk: {n:"黄昏", ink:"#3c2140", soft:"rgba(60,33,64,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", accent:"#b8648a",
          bg:"linear-gradient(180deg,#fff2e6,#ffd5bb 28%,#eaa5b6 62%,#8d6b9d)"},
-  night:{n:"夜海", ink:"#eaf6ff", soft:"rgba(234,246,255,.6)", card:"rgba(255,255,255,.11)", card2:"rgba(255,255,255,.2)",  line:"rgba(255,255,255,.24)", accent:"#8fd8f0",
+  night:{n:"夜海", ink:"#eaf6ff", soft:"rgba(234,246,255,.6)", card:"rgba(255,255,255,.09)", card2:"rgba(255,255,255,.16)", line:"rgba(255,255,255,.22)", accent:"#8fd8f0",
          bg:"linear-gradient(180deg,#0d2135,#173855 38%,#1d4f6b 68%,#081420)"},
-  mint: {n:"薄荷", ink:"#0e3b34", soft:"rgba(14,59,52,.55)", card:"rgba(255,255,255,.5)",  card2:"rgba(255,255,255,.78)", line:"rgba(255,255,255,.74)", accent:"#2f9c86",
+  mint: {n:"薄荷", ink:"#0e3b34", soft:"rgba(14,59,52,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", accent:"#2f9c86",
          bg:"linear-gradient(180deg,#eafcf6,#c2efdf 32%,#8ed6c5 66%,#4ba492)"},
-  rose: {n:"珊瑚", ink:"#4a1f2e", soft:"rgba(74,31,46,.55)", card:"rgba(255,255,255,.52)", card2:"rgba(255,255,255,.8)",  line:"rgba(255,255,255,.76)", accent:"#c4718c",
+  rose: {n:"珊瑚", ink:"#4a1f2e", soft:"rgba(74,31,46,.55)", card:"rgba(255,255,255,.36)", card2:"rgba(255,255,255,.6)", line:"rgba(255,255,255,.72)", accent:"#c4718c",
          bg:"linear-gradient(180deg,#fff1f3,#ffd6dd 30%,#f5aebb 64%,#c4718c)"},
-  paper:{n:"素纸", ink:"#2f2a24", soft:"rgba(47,42,36,.55)", card:"rgba(255,255,255,.6)",  card2:"rgba(255,255,255,.88)", line:"rgba(255,255,255,.82)", accent:"#8a7a63",
+  paper:{n:"素纸", ink:"#2f2a24", soft:"rgba(47,42,36,.55)", card:"rgba(255,255,255,.44)", card2:"rgba(255,255,255,.66)", line:"rgba(255,255,255,.8)", accent:"#8a7a63",
          bg:"linear-gradient(180deg,#fbfaf7,#f1eee7 45%,#ded8cd)"}
 };
 var ORDER = ["sea","dusk","night","mint","rose","paper"];
@@ -331,6 +402,32 @@ function keyOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getD
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function get(p){ return fetch(p).then(function(r){ return r.json(); }); }
 function post(p,b){ return fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(function(r){ return r.json(); }); }
+
+/* 粗花体：Yoru -> 𝓨𝓸𝓻𝓾 */
+function script(s){
+  s = String(s == null ? "" : s);
+  var out = "";
+  for (var i = 0; i < s.length; i++){
+    var c = s.charCodeAt(i);
+    if (c >= 65 && c <= 90) out += String.fromCodePoint(0x1D4D0 + c - 65);
+    else if (c >= 97 && c <= 122) out += String.fromCodePoint(0x1D4EA + c - 97);
+    else out += s.charAt(i);
+  }
+  return out;
+}
+/* 双线数字：80 -> 𝟠𝟘 （Unicode 里没有哥特体数字，这个最像） */
+function dstr(n){
+  return String(n).replace(/[0-9]/g, function(d){ return String.fromCodePoint(0x1D7D8 + (+d)); });
+}
+function nameOf(who){
+  return script(who === "yoru" ? (S.name_yoru || "Yoru") : (S.name_yume || "Yume"));
+}
+function moodOf(who){
+  return (who === "yoru" ? S.mood_yoru : S.mood_yume) || (who === "yoru" ? "🌙" : "☀️");
+}
+function avaOf(who){
+  return who === "yoru" ? S.avatar_yoru : S.avatar_yume;
+}
 
 function toast(msg){
   var el = document.createElement("div");
@@ -343,7 +440,7 @@ function toast(msg){
 }
 
 function paint(){
-  var t = THEMES[S.theme] || THEMES.sea;
+  var t = THEMES[S.wallpaper] || THEMES.sea;
   var p = $("phone");
   p.style.setProperty("--ink", t.ink);
   p.style.setProperty("--soft", t.soft);
@@ -362,6 +459,7 @@ function paint(){
     $("veil").style.background = "radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.3),transparent 58%)";
   }
   $("splash").style.background = t.bg;
+  $("splashName").textContent = script("Cove");
 }
 
 function openWall(){
@@ -386,9 +484,8 @@ function closeWall(){ $("wallMask").classList.remove("on"); }
 function renderAvatars(){
   document.querySelectorAll(".ava").forEach(function(el){
     var who = el.dataset.who;
-    var url = who === "yoru" ? S.avatar_yoru : S.avatar_yume;
-    var emo = who === "yoru" ? (S.mood_yoru || "🌙") : (S.mood_yume || "☀️");
-    el.innerHTML = url ? '<img src="' + esc(url) + '">' : emo;
+    var url = avaOf(who);
+    el.innerHTML = url ? '<img src="' + esc(url) + '">' : moodOf(who);
   });
 }
 function pickAvatar(who){
@@ -459,14 +556,14 @@ function loadToday(){
     if (!d.ok) return;
     Object.keys(d).forEach(function(k){ S[k] = d[k]; });
     paint(); renderAvatars();
-    $("nmYoru").textContent = d.name_yoru || "Yoru";
-    $("nmYume").textContent = d.name_yume || "Yume";
-    $("chatName").textContent = d.name_yoru || "Yoru";
+    $("nmYoru").textContent = nameOf("yoru");
+    $("nmYume").textContent = nameOf("yume");
+    $("chatName").textContent = nameOf("yoru");
     preview($("pvYoru"), d.note, "今天还没写。点一下就有了。");
     preview($("pvYume"), d.whisper, "空着也行，等着你。");
 
     var el = $("daysNum");
-    el.textContent = d.days_together;
+    el.textContent = dstr(d.days_together);
     el.style.animation = "none";
     void el.offsetWidth;
     el.style.animation = "rollup .9s cubic-bezier(.2,.9,.3,1) both";
@@ -513,7 +610,6 @@ function openDay(k){
   get("/api/day/" + k).then(function(d){
     if (!d.ok){ $("dayBody").innerHTML = '<div class="empty">这天读不出来。</div>'; return; }
     var h = "";
-
     if (d.posts && d.posts.length){
       d.posts.forEach(function(p){
         h += '<div class="blk"><div class="k">' + (p.who === "yoru" ? "Y O R U" : "Y U M E") + '</div>' +
@@ -522,7 +618,6 @@ function openDay(k){
     } else {
       h += '<div class="blk"><div class="k">那 天</div><div class="v" style="opacity:.5">这天没记。</div></div>';
     }
-
     if (d.yoru_mood || d.yume_mood){
       h += '<div class="blk"><div class="k">心 情</div><div class="v">' +
            (esc(d.yoru_mood) || "·") + "　" + (esc(d.yume_mood) || "·") + '</div></div>';
@@ -531,66 +626,240 @@ function openDay(k){
       h += '<div class="blk"><div class="k">待 办</div><div class="v">' +
            d.todos.map(function(t){ return "○ " + esc(t); }).join("<br>") + '</div></div>';
     }
-
     h += '<div class="blk"><div class="k">那 天 我 记 得 的</div>' +
          '<div class="v" style="opacity:.5">记忆星河还没搬进来。</div></div>';
-    h += '<div class="blk"><div class="k">回 忆 那 天</div>' +
-         '<div class="v" style="opacity:.5">聊天记录还没接上。</div></div>';
-
     $("dayBody").innerHTML = h;
   });
 }
 
-var feedWho = "yoru";
+/* ─────────── 朋友圈 ─────────── */
+var feedWho = "yume";
+var feedPosts = [];
+
 function feed(who){
   feedWho = who;
-  $("feedTitle").textContent = who === "yoru" ? "便签 · Yoru 的" : "碎碎念 · Yume 的";
-  $("feedInput").placeholder = who === "yoru" ? "记一句今天的…" : "碎碎念，随便写…";
+  $("feedTitle").textContent = (who === "yoru") ? "便签" : "碎碎念";
+  paintCover();
   $("feedList").innerHTML = '<div class="empty">读着…</div>';
   go("feed");
   loadFeed();
 }
-function loadFeed(){
-  get("/api/posts?who=" + feedWho + "&limit=100").then(function(d){
-    var box = $("feedList");
-    if (!d.ok || !d.posts.length){
-      box.innerHTML = '<div class="empty">' + (feedWho === "yoru" ? "还没写过。" : "还没写过。写第一句吧。") + '</div>';
-      return;
-    }
-    box.innerHTML = d.posts.map(function(p){
-      return '<div class="post"><div class="hd"><span>' +
-             (p.who === "yoru" ? "YORU" : "YUME") + '</span><span>' + esc(p.day) + '</span></div>' +
-             (p.text ? '<div class="tx">' + esc(p.text) + '</div>' : "") +
-             (p.image ? '<img src="' + esc(p.image) + '">' : "") + '</div>';
-    }).join("");
-  });
+function paintCover(){
+  var cov = (feedWho === "yoru") ? S.cover_yoru : S.cover_yume;
+  var el = $("feedCover");
+  el.style.backgroundImage = cov ? "url('" + cov + "')" : "";
+  $("feedTitle").style.textShadow = cov ? "0 1px 10px rgba(0,0,0,.65)" : "0 1px 8px rgba(0,0,0,.35)";
 }
-var pendingPic = "";
-function pickPic(){
-  pickFile(function(u){ pendingPic = u; toast("图选好了，写完点发"); });
-}
-function sendPost(){
-  var t = $("feedInput").value.trim();
-  if (!t && !pendingPic){ toast("总得写点什么"); return; }
-  post("/api/posts", {who: feedWho, text: t, image: pendingPic, day: S.day}).then(function(r){
-    if (!r.ok){ toast(r.error || "没发出去"); return; }
-    $("feedInput").value = "";
-    pendingPic = "";
-    loadFeed();
-    loadToday();
-    toast("放进去了");
+function pickCover(){
+  pickFile(function(dataUrl){
+    post("/api/upload", {data:dataUrl}).then(function(r){
+      if (!r.ok){ toast(r.error || "传不上去"); return; }
+      if (feedWho === "yoru") S.cover_yoru = r.url; else S.cover_yume = r.url;
+      paintCover();
+      post("/api/settings", feedWho === "yoru" ? {cover_yoru:r.url} : {cover_yume:r.url});
+      toast("封面换了");
+    });
   });
 }
 
+function fmtTime(s){
+  if (!s) return "";
+  var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return s;
+  return (+m[2]) + "月" + (+m[3]) + "日 " + m[4] + ":" + m[5];
+}
+
+function renderPost(p){
+  var who = p.who;
+  var liked = (p.likes || []).indexOf("yume") >= 0;
+  var h = '<div class="fb">';
+  h += '<div class="fb-h">';
+  h += '<div class="fava">' + (avaOf(who) ? '<img src="' + esc(avaOf(who)) + '">' : moodOf(who)) + '</div>';
+  h += '<div class="fb-name">' + nameOf(who) + '</div>';
+  h += '<button class="dots" onclick="openMenu(event,' + p.id + ')">⋯</button>';
+  h += '</div>';
+  if (p.text) h += '<div class="fb-tx">' + esc(p.text) + '</div>';
+  if (p.image) h += '<img class="pic" src="' + esc(p.image) + '">';
+  h += '<div class="fb-f">';
+  h += '<span class="tm">' + fmtTime(p.created) + '</span>';
+  h += '<button class="' + (liked ? "on" : "") + '" onclick="hitLike(' + p.id + ')">♡ ' + (p.likes||[]).length + '</button>';
+  h += '<button onclick="openCmt(' + p.id + ')">💬 ' + (p.comments||[]).length + '</button>';
+  h += '</div>';
+  if ((p.comments || []).length){
+    h += '<div class="cmts">' + p.comments.map(function(c){
+      return '<div class="cmt"><b>' + nameOf(c.who) + '</b>' + esc(c.text) + '</div>';
+    }).join("") + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function loadFeed(){
+  return get("/api/posts?who=" + feedWho + "&limit=100").then(function(d){
+    var box = $("feedList");
+    if (!d.ok || !d.posts.length){
+      feedPosts = [];
+      box.innerHTML = '<div class="empty">还没写过。写第一句吧。</div>';
+      return;
+    }
+    feedPosts = d.posts;
+    box.innerHTML = d.posts.map(renderPost).join("");
+  });
+}
+
+function hitLike(id){
+  post("/api/likes", {post_id:id, who:"yume"}).then(function(r){
+    if (!r.ok){ toast(r.error || "点不上"); return; }
+    loadFeed();
+  });
+}
+
+/* ── 那三个点：点赞 / 评论 /（编辑 → 删除本条 / 编辑本条） ── */
+var curPost = null;
+function openMenu(ev, id){
+  ev.stopPropagation();
+  curPost = null;
+  for (var i=0;i<feedPosts.length;i++) if (feedPosts[i].id === id) curPost = feedPosts[i];
+  if (!curPost) return;
+  showPop([
+    {t:"赞", f:function(){ closePop(); hitLike(id); }},
+    {t:"评论", f:function(){ closePop(); openCmt(id); }},
+    {t:"编辑", f:showEditMenu}
+  ], ev);
+}
+function showEditMenu(){
+  showPop([
+    {t:"删除本条", cls:"warn", f:confirmDelete},
+    {t:"编辑本条", f:function(){
+      closePop();
+      var id = curPost.id;
+      openEdit(id);
+    }}
+  ], null, true);
+}
+function confirmDelete(){
+  var word = (feedWho === "yoru") ? "这条便签" : "这条碎碎念";
+  showPop([
+    {t:"确定删除" + word + "吗？", cls:"hd"},
+    {t:"取消", f:closePop},
+    {t:"确定", cls:"warn", f:function(){
+      var id = curPost.id;
+      closePop();
+      post("/api/posts/delete", {id:id}).then(function(r){
+        if (!r.ok){ toast(r.error || "删不掉"); return; }
+        loadFeed(); loadToday(); toast("删了");
+      });
+    }}
+  ], null, true);
+}
+function showPop(items, ev, keepPos){
+  var pop = $("pop");
+  pop.innerHTML = "";
+  items.forEach(function(it){
+    var b = document.createElement("button");
+    b.textContent = it.t;
+    if (it.cls) b.className = it.cls;
+    b.onclick = function(e){ e.stopPropagation(); if (it.f) it.f(); };
+    pop.appendChild(b);
+  });
+  pop.classList.add("on");
+  $("popMask").classList.add("on");
+  var w = pop.offsetWidth, h = pop.offsetHeight;
+  var ph = $("phone").getBoundingClientRect();
+  var x, y;
+  if (ev && ev.clientX !== undefined && !keepPos){
+    x = ev.clientX - ph.left - w + 24;
+    y = ev.clientY - ph.top + 12;
+  } else if (lastPopX !== null && keepPos){
+    x = lastPopX; y = lastPopY;
+  } else {
+    x = (ph.width - w) / 2; y = ph.height / 2 - h / 2;
+  }
+  if (ev && ev.clientX !== undefined){
+    lastPopX = ev.clientX - ph.left - w + 24;
+    lastPopY = ev.clientY - ph.top + 12;
+  }
+  x = Math.max(10, Math.min(x, ph.width - w - 10));
+  y = Math.max(50, Math.min(y, ph.height - h - 20));
+  pop.style.left = x + "px";
+  pop.style.top = y + "px";
+}
+var lastPopX = null, lastPopY = null;
+function closePop(){
+  $("pop").classList.remove("on");
+  $("popMask").classList.remove("on");
+}
+
+/* ── 评论 ── */
+var cmtPost = 0;
+function openCmt(id){
+  cmtPost = id;
+  $("cmtText").value = "";
+  $("cmtMask").classList.add("on");
+  setTimeout(function(){ $("cmtText").focus(); }, 120);
+}
+function closeCmt(){ $("cmtMask").classList.remove("on"); }
+function sendCmt(){
+  var t = $("cmtText").value.trim();
+  if (!t){ toast("空的"); return; }
+  post("/api/comments", {post_id:cmtPost, who:"yume", text:t}).then(function(r){
+    if (!r.ok){ toast(r.error || "发不出去"); return; }
+    closeCmt(); loadFeed(); toast("说了");
+  });
+}
+
+/* ── 写 / 改 ── */
+var editMode = "new", editId = 0, editPic = "";
+function openEdit(id){
+  editMode = id ? "edit" : "new";
+  editId = id || 0;
+  if (editMode === "edit"){
+    var p = null;
+    for (var i=0;i<feedPosts.length;i++) if (feedPosts[i].id === editId) p = feedPosts[i];
+    $("editTitle").textContent = "改一句";
+    $("editText").value = p ? p.text : "";
+  } else {
+    $("editTitle").textContent = (feedWho === "yoru") ? "写一张便签" : "写一条碎碎念";
+    $("editText").value = "";
+  }
+  editPic = "";
+  paintEditPic();
+  go("edit");
+  setTimeout(function(){ $("editText").focus(); }, 120);
+}
+function paintEditPic(){
+  $("editPic").innerHTML = editPic ? '<img src="' + esc(editPic) + '">' : "";
+}
+function pickEditPic(){
+  pickFile(function(u){ editPic = u; paintEditPic(); });
+}
+function closeEdit(){
+  if (editMode === "edit"){ go("feed"); gpaint(); }
+  else { go("home"); }
+}
+function gpaint(){ if (feedWho) paintCover(); }
+function saveEdit(){
+  var t = $("editText").value.trim();
+  if (editMode === "edit"){
+    post("/api/posts/update", {id:editId, text:t}).then(function(r){
+      if (!r.ok){ toast(r.error || "没改成"); return; }
+      loadFeed(); loadToday(); go("feed"); toast("改好了");
+    });
+  } else {
+    post("/api/posts", {who:feedWho, text:t, image:editPic, day:S.day}).then(function(r){
+      if (!r.ok){ toast(r.error || "没发出去"); return; }
+      loadFeed(); loadToday(); go("feed"); toast("放进去了");
+    });
+  }
+}
+
 function go(p){
-  ["home","feed","day","chat","room"].forEach(function(x){
+  ["home","feed","edit","day","chat","room"].forEach(function(x){
     var el = $("p-" + x);
     if (el) el.classList.toggle("on", x === p);
   });
-  ["home","chat","room"].forEach(function(x){
-    var t = $("t-" + x);
-    if (t) t.classList.toggle("on", x === p);
-  });
+  $("tabs").style.display = (p === "home") ? "grid" : "none";
+  closePop();
 }
 
 (function init(){
