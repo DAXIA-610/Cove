@@ -1,0 +1,3 @@
+cove.db
+*.pyc
+__pycache__/
