@@ -140,6 +140,11 @@ chk("today 带着版本号", bool(d.get("version")) and d["version"] != "?", d.g
 # 默认模型名不能是已经下线的旧名字
 import llm as _llm
 chk("默认模型不是废名字", _llm.DEFAULT_MODEL not in _llm.DEAD_NAMES, _llm.DEFAULT_MODEL)
+chk("供应商名单里有 deepseek / 硅基流动 / tavily",
+    {"deepseek", "siliconflow", "tavily"} <= {p["id"] for p in _llm.PRESETS},
+    [p["id"] for p in _llm.PRESETS])
+chk("名单里每一家都有地址或说明",
+    all(p.get("base") or p.get("hint") for p in _llm.PRESETS), _llm.PRESETS)
 chk("存着的旧名字会被换掉", _llm.fix_model("deepseek-chat") == _llm.DEFAULT_MODEL, _llm.fix_model("deepseek-chat"))
 chk("正常名字原样还回来", _llm.fix_model("deepseek-v4-pro") == "deepseek-v4-pro", _llm.fix_model("deepseek-v4-pro"))
 chk("空的就当没填，给默认", _llm.fix_model("") == _llm.DEFAULT_MODEL, _llm.fix_model(""))
@@ -193,6 +198,15 @@ c, d = req(base, "/api/calendar?y=2026&m=10")
 chk("日历上有这一天", "2026-10-02" in json.dumps(d.get("marked", {})), d)
 c, d = req(base, "/api/day/2026-13-99")
 chk("坏日期被挡", isinstance(d, dict) and not d.get("ok"), d)
+c, d = req(base, "/api/presets")
+chk("GET /api/presets 拿得到名单", c == 200 and len(d.get("presets") or []) >= 4, str(d)[:120])
+c, d = req(base, "/api/models", {"base": "", "key": ""})
+chk("没填地址时不瞎连，好好报错", c == 200 and not d.get("ok") and d.get("error"), d)
+c, d = req(base, "/api/settings", {"vision_key": "t", "vision_model": "m",
+                                   "vision_base": "https://x.invalid"})
+chk("看图的钥匙存得进去", d.get("ok"), d)
+c, d = req(base, "/api/today")
+chk("today 里有 vision_key", "vision_key" in d, sorted(d.keys())[:8])
 c, d = req(base, "/api/memories?day=2026-10-02")
 chk("/api/memories（那天的记忆）不炸", c == 200 and isinstance(d, dict), (c, str(d)[:80]))
 

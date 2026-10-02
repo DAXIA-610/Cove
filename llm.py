@@ -69,6 +69,32 @@ PROVIDERS = [
 ]
 
 
+
+# 界面上「哪一家」的那份名单。kind：chat 说话的 / search 搜索的。
+# 地址我没瞎写：DeepSeek 的 base 不带 /v1 也能到 /chat/completions，
+# 硅基流动必须带 /v1 —— 这是两家自己的规矩。
+PRESETS = [
+    {"id": "deepseek", "name": "DeepSeek 深度求索", "kind": "chat",
+     "base": "https://api.deepseek.com", "hint": "sk- 开头",
+     "models": ["deepseek-flash", "deepseek-v4-pro"]},
+    {"id": "siliconflow", "name": "硅基流动 SiliconFlow", "kind": "chat",
+     "base": "https://api.siliconflow.cn/v1", "hint": "sk- 开头",
+     "models": ["Qwen/Qwen3-VL-32B-Instruct", "deepseek-ai/DeepSeek-V4-Flash"]},
+    {"id": "moonshot", "name": "月之暗面 Kimi", "kind": "chat",
+     "base": "https://api.moonshot.cn/v1", "hint": "sk- 开头",
+     "models": ["moonshot-v1-32k"]},
+    {"id": "openai", "name": "OpenAI", "kind": "chat",
+     "base": "https://api.openai.com/v1", "hint": "sk- 开头",
+     "models": ["gpt-4o-mini", "gpt-4o"]},
+    {"id": "tavily", "name": "Tavily（搜索）", "kind": "search",
+     "base": "https://api.tavily.com", "hint": "tvly- 开头", "models": []},
+    {"id": "brave", "name": "Brave（搜索）", "kind": "search",
+     "base": "", "hint": "Brave 的 key", "models": []},
+    {"id": "bocha", "name": "博查（搜索）", "kind": "search",
+     "base": "https://api.bochaai.com", "hint": "sk- 开头", "models": []},
+]
+
+
 class LLMError(Exception):
     """调不通的时候，把原因裹成人话抛出去。"""
 
@@ -138,6 +164,33 @@ def chat(messages, api_key, model=None, base=None, tools=None, timeout=TIMEOUT):
         return d["choices"][0]["message"]
     except Exception:
         raise LLMError("对面回了，但没有 choices：" + raw[:200]) from None
+
+
+def models(base, key, timeout=20):
+    """问她填的那家：你手上到底有哪些模型。
+
+    名字我不猜 —— 让她自己挑。以后谁家改名字、上新的，界面自己跟上。
+    """
+    if not base:
+        return {"ok": False, "error": "先填接口地址"}
+    if not key:
+        return {"ok": False, "error": "先填 key"}
+    url = base.strip().rstrip("/") + "/models"
+    req = urllib.request.Request(url, headers=_headers(key), method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            d = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": "对面回了 %s" % e.code}
+    except Exception as e:
+        return {"ok": False, "error": "没连上（%s）" % type(e).__name__}
+    ids = []
+    for it in (d.get("data") or d.get("models") or []):
+        mid = (it.get("id") or it.get("name") or "") if isinstance(it, dict) else str(it)
+        if mid:
+            ids.append(mid)
+    ids = sorted(set(ids))
+    return {"ok": True, "n": len(ids), "models": ids[:400]}
 
 
 def balance(api_key, base=None, timeout=30):

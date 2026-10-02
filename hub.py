@@ -232,6 +232,8 @@ SETTING_KEYS = (
     "mood_yoru", "mood_yume",
     # 模型那口子的配置（key 只存在她自己手机上）
     "api_key", "api_base", "model", "tools",
+    # 看图那口子（留空 = 跟说话那家一样）
+    "vision_base", "vision_key", "vision_model",
     # 搜索那口子
     "search_provider", "search_key", "search_base",
 )
@@ -1140,21 +1142,38 @@ def _save_meta(c, mid, meta):
         pass          # 记不上账也不能耽误说话
 
 
+def llm_conf(has_image=False):
+    """这一轮该用哪家说话。
+
+    默认是「说话」那家。这一轮带了图、而且她另外配了「看图」那家，就换看图那家 ——
+    她说她 DS 和硅基流动两家都有，哪家顺手填哪家。
+    """
+    with db() as c:
+        base = get_setting(c, "api_base") or llm.DEFAULT_BASE
+        key = get_setting(c, "api_key")
+        model = llm.fix_model(get_setting(c, "model"))
+        if has_image:
+            vk = (get_setting(c, "vision_key") or "").strip()
+            vm = (get_setting(c, "vision_model") or "").strip()
+            if vk and vm:
+                return (get_setting(c, "vision_base") or base), vk, vm
+    return base, key, model
+
+
 def _generate(user_text, drop_id=0):
     """把一句话交给模型，替它办完手里的活，把它回的吐出来（不落库）。
 
     顺手把这一趟花掉的、想过的、动过的手都塞进 meta —— 页面上点开那条就能看。
     """
-    with db() as c:
-        api_key = get_setting(c, "api_key")
-        base = get_setting(c, "api_base") or llm.DEFAULT_BASE
-        model = llm.fix_model(get_setting(c, "model"))
+    msgs = build_messages(user_text, drop_id)
+    # 这一轮带了图吗？带了就看「看图」那家配没配 —— 配了就换它来看
+    has_img = any(isinstance(m.get("content"), list) for m in msgs)
+    base, api_key, model = llm_conf(has_img)
 
     if not api_key:
         return {"ok": True, "need_key": True, "reply": "",
-                "error": "还没有填 API key——去「模型」那里填一下"}
+                "error": "还没有填 API key——去「钥匙」那页填一下"}
 
-    msgs = build_messages(user_text, drop_id)
     tools = all_tools() if llm.supports_tools(model) else None
     used = []
     reply = ""
@@ -1708,6 +1727,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_balance())
             if p == "/api/providers":
                 return self.send_json({"ok": True, "providers": llm.PROVIDERS})
+            if p == "/api/presets":
+                return self.send_json({"ok": True, "presets": llm.PRESETS})
             if p == "/api/search/providers":
                 return self.send_json(api_search_providers())
             if p == "/api/whisper":
@@ -1778,6 +1799,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_settings(body))
             if p == "/api/search/probe":
                 return self.send_json(api_search_probe(body))
+            if p == "/api/models":
+                return self.send_json(llm.models((body.get("base") or "").strip(),
+                                                (body.get("key") or "").strip()))
             if p == "/api/upload":
                 return self.send_json(api_upload(body))
             if p.startswith("/api/day/"):
