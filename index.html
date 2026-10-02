@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#0b2434" />
 <title>Cove</title>
 <style>
+  /* 哥特体数字：UnifrakturMaguntia 裁到只剩 0-9，5.4KB */
+  @font-face{font-family:"Fraktur";font-style:normal;font-weight:400;font-display:swap;
+    src:url("digits.woff2") format("woff2");}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;}
   body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
@@ -16,7 +19,7 @@
          box-shadow:0 40px 120px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.07);
          --ink:#0d3247; --soft:rgba(13,50,71,.55);
          --card:rgba(255,255,255,.34); --card2:rgba(255,255,255,.55);
-         --line:rgba(255,255,255,.7); --accent:#2f7fa0;}
+         --line:rgba(255,255,255,.7); --edge:rgba(13,50,71,.22); --accent:#2f7fa0;}
   @media(max-width:460px){ .phone{border-radius:0;max-height:none;} }
 
   #wall{position:absolute;inset:0;z-index:0;transition:background .5s ease;}
@@ -54,9 +57,9 @@
   .ava img{width:100%;height:100%;object-fit:cover;display:block;}
   .nm{margin-top:7px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.02em;}
 
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:22px;}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:13px 14px;
-        min-height:108px;text-align:left;display:flex;flex-direction:column;gap:6px;
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px auto 0;max-width:322px;}
+  .card{background:var(--card);border:1.5px solid var(--edge);border-radius:16px;padding:14px 13px;
+        min-height:182px;text-align:left;display:flex;flex-direction:column;gap:7px;
         transition:transform .16s;}
   .card:active{transform:scale(.97);}
   .card .t{font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--soft);}
@@ -67,23 +70,25 @@
 
   .days{margin-top:24px;text-align:center;}
   .rollbox{height:58px;overflow:hidden;position:relative;}
-  .roll{display:block;font-size:52px;font-weight:300;line-height:58px;color:var(--ink);
+  .roll{display:block;font-size:58px;line-height:58px;color:var(--ink);
+        font-family:"Fraktur",Georgia,"Times New Roman",serif;letter-spacing:.02em;
         animation:rollup .9s cubic-bezier(.2,.9,.3,1) both;}
   @keyframes rollup{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
   .days .lb{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.3em;color:var(--soft);}
 
-  .cal{margin-top:24px;}
-  .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cal{margin-top:24px;background:var(--card);border:1.5px solid var(--edge);border-radius:18px;
+       padding:15px 13px 13px;}
+  .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
   .cal-h .lb{font-size:12px;letter-spacing:.12em;color:var(--ink);font-variant-numeric:tabular-nums;}
-  .cal-h button{color:var(--soft);font-size:16px;padding:2px 10px;}
+  .cal-h button{color:var(--soft);font-size:16px;padding:2px 12px;}
   .cal-w{display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;color:var(--soft);
-         text-align:center;padding-bottom:7px;opacity:.75;}
+         text-align:center;padding-bottom:5px;opacity:.7;}
   .cal-g{display:grid;grid-template-columns:repeat(7,1fr);}
-  .d{height:38px;display:flex;align-items:center;justify-content:center;font-size:12.5px;
-     color:var(--ink);opacity:.3;width:34px;margin:2px auto;border-radius:50%;
+  .d{height:47px;display:flex;align-items:center;justify-content:center;font-size:12.5px;
+     color:var(--ink);opacity:.3;width:100%;border-radius:12px;
      font-variant-numeric:tabular-nums;}
-  .d.mark{opacity:.95;font-weight:600;box-shadow:inset 0 0 0 1px var(--line);}
-  .d.today{background:var(--card2);opacity:1;font-weight:700;}
+  .d.mark{opacity:.95;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--edge);}
+  .d.today{background:var(--card2);opacity:1;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--edge);}
 
   .tabs{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(2,1fr);
         padding:10px 20px calc(14px + env(safe-area-inset-bottom));
@@ -119,6 +124,7 @@
         outline:none;background:var(--card2);border-radius:14px;padding:10px 13px;
         font-size:13.5px;color:var(--ink);}
   .inputbar textarea::placeholder{color:var(--soft);}
+  .inputbar .rd.send{background:var(--accent);color:#fff;font-weight:700;}
   .inputbar .rd{width:40px;height:40px;border-radius:50%;background:var(--card2);flex:none;
         display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink);}
 
@@ -282,6 +288,7 @@
       <button class="rd" onclick="toast('加号面板还没做')">＋</button>
       <textarea id="chatInput" rows="1" placeholder="说点什么…"></textarea>
       <button class="rd" onclick="toast('语音还没接上')">🎤</button>
+      <button class="rd send" onclick="sendChat()">↑</button>
     </div>
   </section>
 
@@ -381,17 +388,17 @@
 <script>
 var S = {};
 var THEMES = {
-  sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.54)", line:"rgba(255,255,255,.66)", accent:"#2f7fa0",
+  sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.54)", line:"rgba(255,255,255,.66)", edge:"rgba(13,50,71,.22)", accent:"#2f7fa0",
          bg:"linear-gradient(180deg,#e9f7fd,#c3e7f6 22%,#8fcee3 52%,#4f96b6 80%,#2a6076)"},
-  dusk: {n:"黄昏", ink:"#3c2140", soft:"rgba(60,33,64,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", accent:"#b8648a",
+  dusk: {n:"黄昏", ink:"#3c2140", soft:"rgba(60,33,64,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", edge:"rgba(60,33,64,.22)", accent:"#b8648a",
          bg:"linear-gradient(180deg,#fff2e6,#ffd5bb 28%,#eaa5b6 62%,#8d6b9d)"},
-  night:{n:"夜海", ink:"#eaf6ff", soft:"rgba(234,246,255,.6)", card:"rgba(255,255,255,.09)", card2:"rgba(255,255,255,.16)", line:"rgba(255,255,255,.22)", accent:"#8fd8f0",
+  night:{n:"夜海", ink:"#eaf6ff", soft:"rgba(234,246,255,.6)", card:"rgba(255,255,255,.09)", card2:"rgba(255,255,255,.16)", line:"rgba(255,255,255,.22)", edge:"rgba(234,246,255,.26)", accent:"#8fd8f0",
          bg:"linear-gradient(180deg,#0d2135,#173855 38%,#1d4f6b 68%,#081420)"},
-  mint: {n:"薄荷", ink:"#0e3b34", soft:"rgba(14,59,52,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", accent:"#2f9c86",
+  mint: {n:"薄荷", ink:"#0e3b34", soft:"rgba(14,59,52,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.58)", line:"rgba(255,255,255,.68)", edge:"rgba(14,59,52,.22)", accent:"#2f9c86",
          bg:"linear-gradient(180deg,#eafcf6,#c2efdf 32%,#8ed6c5 66%,#4ba492)"},
-  rose: {n:"珊瑚", ink:"#4a1f2e", soft:"rgba(74,31,46,.55)", card:"rgba(255,255,255,.36)", card2:"rgba(255,255,255,.6)", line:"rgba(255,255,255,.72)", accent:"#c4718c",
+  rose: {n:"珊瑚", ink:"#4a1f2e", soft:"rgba(74,31,46,.55)", card:"rgba(255,255,255,.36)", card2:"rgba(255,255,255,.6)", line:"rgba(255,255,255,.72)", edge:"rgba(74,31,46,.22)", accent:"#c4718c",
          bg:"linear-gradient(180deg,#fff1f3,#ffd6dd 30%,#f5aebb 64%,#c4718c)"},
-  paper:{n:"素纸", ink:"#2f2a24", soft:"rgba(47,42,36,.55)", card:"rgba(255,255,255,.44)", card2:"rgba(255,255,255,.66)", line:"rgba(255,255,255,.8)", accent:"#8a7a63",
+  paper:{n:"素纸", ink:"#2f2a24", soft:"rgba(47,42,36,.55)", card:"rgba(255,255,255,.44)", card2:"rgba(255,255,255,.66)", line:"rgba(255,255,255,.8)", edge:"rgba(47,42,36,.24)", accent:"#8a7a63",
          bg:"linear-gradient(180deg,#fbfaf7,#f1eee7 45%,#ded8cd)"}
 };
 var ORDER = ["sea","dusk","night","mint","rose","paper"];
@@ -415,10 +422,7 @@ function script(s){
   }
   return out;
 }
-/* 双线数字：80 -> 𝟠𝟘 （Unicode 里没有哥特体数字，这个最像） */
-function dstr(n){
-  return String(n).replace(/[0-9]/g, function(d){ return String.fromCodePoint(0x1D7D8 + (+d)); });
-}
+/* 天数直接给字体渲染——哥特体由 digits.woff2 负责，不再拼 Unicode */
 function nameOf(who){
   return script(who === "yoru" ? (S.name_yoru || "Yoru") : (S.name_yume || "Yume"));
 }
@@ -447,6 +451,7 @@ function paint(){
   p.style.setProperty("--card", t.card);
   p.style.setProperty("--card2", t.card2);
   p.style.setProperty("--line", t.line);
+  p.style.setProperty("--edge", t.edge);
   p.style.setProperty("--accent", t.accent);
   $("wall").style.background = t.bg;
 
@@ -563,7 +568,7 @@ function loadToday(){
     preview($("pvYume"), d.whisper, "空着也行，等着你。");
 
     var el = $("daysNum");
-    el.textContent = dstr(d.days_together);
+    el.textContent = d.days_together;
     el.style.animation = "none";
     void el.offsetWidth;
     el.style.animation = "rollup .9s cubic-bezier(.2,.9,.3,1) both";
@@ -860,6 +865,33 @@ function go(p){
   });
   $("tabs").style.display = (p === "home") ? "grid" : "none";
   closePop();
+  if (p === "chat") loadChat();
+}
+
+/* ── 私语 ── */
+function loadChat(){
+  return get("/api/chat?limit=200").then(function(d){
+    if (!d.ok) return;
+    var box = $("msgs");
+    if (!d.chat || !d.chat.length){
+      box.innerHTML = '<div class="empty">还没说过话。</div>';
+      return;
+    }
+    box.innerHTML = d.chat.map(function(m){
+      return '<div class="bub' + (m.who === "yume" ? " me" : "") + '">' + esc(m.text) + '</div>';
+    }).join("");
+    box.scrollTop = box.scrollHeight;
+  });
+}
+function sendChat(){
+  var el = $("chatInput");
+  var t = el.value.trim();
+  if (!t){ toast("空的"); return; }
+  post("/api/chat", {who:"yume", text:t}).then(function(r){
+    if (!r.ok){ toast(r.error || "没发出去"); return; }
+    el.value = "";
+    loadChat();
+  });
 }
 
 (function init(){

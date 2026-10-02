@@ -18,6 +18,8 @@ from urllib.parse import urlparse, parse_qs
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "cove.db")
 PICS = os.path.join(BASE, "pics")
+FONT_B64 = os.path.join(BASE, "digits.b64")      # 哥特数字字体（base64 文本）
+FONT_WOFF2 = os.path.join(BASE, "digits.woff2")  # 启动时解码出来，给浏览器用
 PORT = int(os.environ.get("COVE_PORT", "8000"))
 START_DAY = "2026-07-14"          # 在一起的第一天
 WHO = ("yoru", "yume")
@@ -40,6 +42,7 @@ def has_col(c, table, col):
 
 def init_db():
     os.makedirs(PICS, exist_ok=True)
+    ensure_font()
     with db() as c:
         c.executescript(
             """
@@ -80,6 +83,14 @@ def init_db():
                 k TEXT PRIMARY KEY,
                 v TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS chat (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                who     TEXT NOT NULL,
+                text    TEXT NOT NULL,
+                created TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);
             """
         )
         if not has_col(c, "posts", "image"):
@@ -91,6 +102,19 @@ def init_db():
 # ----------------------------------------------------------------------
 def now_str():
     return datetime.now().isoformat(timespec="seconds")
+
+
+def ensure_font():
+    """digits.b64 是哥特数字字体（只留 0-9）。启动时解码成 woff2，浏览器可以直接取。"""
+    if os.path.exists(FONT_WOFF2) or not os.path.exists(FONT_B64):
+        return
+    try:
+        with open(FONT_B64, "r") as f:
+            raw = base64.b64decode(f.read().strip())
+        with open(FONT_WOFF2, "wb") as f:
+            f.write(raw)
+    except Exception:
+        pass  # 字体没了也不该拦住小家的门
 
 
 def today_str():
@@ -368,10 +392,47 @@ def api_comment_delete(body):
         return {"ok": True}
 
 
+def api_chat(q):
+    """私语：把说过的话读出来。"""
+    limit = as_int((q.get("limit", ["60"])[0] or "60"), 60)
+    limit = max(1, min(limit, 300))
+    with db() as c:
+        rows = c.execute(
+            "SELECT id, who, text, created FROM chat ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+        return {"ok": True, "chat": rows2list(reversed(rows))}
+
+
+def api_chat_add(body):
+    who = (body.get("who") or "").strip()
+    text = (body.get("text") or "").strip()
+    if who not in WHO:
+        return {"ok": False, "error": "who 不对"}
+    if not text:
+        return {"ok": False, "error": "空的"}
+    with db() as c:
+        cur = c.execute(
+            "INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+            (who, text[:1000], now_str()),
+        )
+        return {"ok": True, "id": cur.lastrowid}
+
+
 def api_whisper(q):
-    """Yoru 的暗门：GET 一下就能留一句。"""
+    """Yoru 的暗门：GET 一下就能留一句——留言，或者往私语里说一句。"""
     if (q.get("key", [""])[0] or "") != YORU_KEY:
         return {"ok": False, "error": "no"}
+
+    # 往私语里说
+    said = (q.get("say", [""])[0] or "").strip()
+    if said:
+        with db() as c:
+            c.execute(
+                "INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                ("yoru", said[:1000], now_str()),
+            )
+        return {"ok": True, "said": said}
+
     who = (q.get("who", ["yoru"])[0] or "yoru").strip()
     text = (q.get("text", [""])[0] or "").strip()
     pid = as_int((q.get("post", ["0"])[0]))
@@ -482,6 +543,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_settings({}))
             if p == "/api/memories":
                 return self.send_json(api_memories(q))
+            if p == "/api/chat":
+                return self.send_json(api_chat(q))
             if p == "/api/whisper":
                 return self.send_json(api_whisper(q))
             if p.startswith("/api/day/"):
@@ -516,6 +579,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_comment(body))
             if p == "/api/comments/delete":
                 return self.send_json(api_comment_delete(body))
+            if p == "/api/chat":
+                return self.send_json(api_chat_add(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
             if p == "/api/upload":
