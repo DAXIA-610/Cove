@@ -82,14 +82,16 @@
   .cal-w{display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;color:var(--soft);
          text-align:center;padding-bottom:5px;opacity:.7;}
   .cal-g{display:grid;grid-template-columns:repeat(7,1fr);}
-  .d{height:47px;display:flex;align-items:center;justify-content:center;font-size:13px;
-     color:var(--ink);opacity:.62;width:100%;border-radius:12px;position:relative;
-     font-variant-numeric:tabular-nums;}
+  /* 日历数字：她嫌太淡。透明度 .62 → .95，字号 13 → 16，换成那套花体数字
+     （digits.woff2 = UnifrakturMaguntia，查过，0-9 十个都在）。 */
+  .d{height:47px;display:flex;align-items:center;justify-content:center;font-size:16px;
+     color:var(--ink);opacity:.95;width:100%;border-radius:12px;position:relative;
+     font-family:"Fraktur",Georgia,serif;letter-spacing:.02em;}
   .d.mark{opacity:1;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--edge);}
   .d.mark::after{content:"";position:absolute;bottom:8px;left:50%;margin-left:-1.5px;
                  width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.5;}
   .d.today{background:var(--card2);opacity:1;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--edge);}
-  .d .dd{font-family:"Fraktur",serif;font-size:15.5px;line-height:1;}
+  .d .dd{font-size:20px;line-height:1;}
   .cal-h .lb .dd{font-family:"Fraktur",serif;font-size:15px;letter-spacing:0;}
 
   .tabs{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(2,1fr);
@@ -117,6 +119,8 @@
   .blk .more{display:block;width:100%;margin-top:10px;font-size:11.5px;letter-spacing:.1em;
              color:var(--soft);text-align:center;padding:7px 0;
              border-top:1px dashed var(--line);}
+  .blk .sub{font-size:10.5px;color:var(--soft);letter-spacing:.02em;line-height:1.7;
+            margin:-3px 0 11px;}
 
   /* 那天里那段只读的聊天 */
   .mini{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px 0;}
@@ -125,7 +129,7 @@
   .mini .m.me{align-self:flex-end;opacity:.88;}
 
   /* 那条消息的账：抽屉 */
-  .drawer{width:100%;height:58%;background:#fff;color:#0d3247;border-radius:24px 24px 0 0;
+  .drawer{width:100%;height:52%;background:#fff;color:#0d3247;border-radius:24px 24px 0 0;
           padding:10px 20px calc(22px + env(safe-area-inset-bottom));
           display:flex;flex-direction:column;overflow:hidden;
           animation:up .28s cubic-bezier(.2,.9,.3,1) both;}
@@ -844,13 +848,18 @@ function openDay(k){
     if (!d.ok){ $("dayBody").innerHTML = '<div class="empty">这天读不出来。</div>'; return; }
     var h = "";
 
-    h += '<div class="blk"><div class="k">那 天 说 过 的 话</div><div class="v">' +
-         paintMini(d.chat || []) + '</div></div>';
+    h += '<div class="blk"><div class="k">回 忆 当 天</div>' +
+         '<div class="sub">那天我们说过的话。只看，不能在这儿说。</div>' +
+         '<div class="v">' + paintMini(d.chat || []) + '</div></div>';
 
-    h += '<div class="blk"><div class="k">那 天 我 记 得 的</div><div class="v">' +
-         paintDayMem(d.memories || []) + '</div></div>';
+    h += '<div class="blk"><div class="k">那 天 我 记 得 的</div>' +
+         '<div class="sub">从记忆星河里捞出来的那几条。</div>' +
+         '<div class="v">' + paintDayMem(d.memories || []) + '</div></div>';
 
-    h += '<div class="blk"><div class="k">那 天 的 碎 碎 念</div>' +
+    h += '<div class="blk" id="dayDiaryBlk" style="display:none"></div>';
+
+    h += '<div class="blk"><div class="k">那 天 的 碎 碎 念 和 便 签</div>' +
+         '<div class="sub">收着呢，点一下才全出来。</div>' +
          '<div class="v" id="dayPosts">' + paintDayPosts(d.posts || [], false) + '</div></div>';
 
     var m = d.mood || {};
@@ -863,7 +872,26 @@ function openDay(k){
            d.todos.map(function(t){ return "○ " + esc(t); }).join("<br>") + '</div></div>';
     }
     $("dayBody").innerHTML = h;
+    paintDayDiary(k);
   });
+}
+
+function paintDayDiary(day){
+  get("/api/r/diary/" + day).then(function(d){
+    var el = $("dayDiaryBlk");
+    if (!el) return;
+    var n = (d && d.text) ? d.text.length : 0;
+    el.style.display = "";
+    el.innerHTML = '<div class="k">我 的 日 记</div>' +
+      '<div class="sub">这天的话。只存，我不读。</div>' +
+      '<button class="more" onclick="goDiaryDay(\'' + day + '\')">' +
+      (n ? "这天写了 " + n + " 字 · 翻开" : "这天还空着 · 写一句") + '</button>';
+  });
+}
+
+function goDiaryDay(day){
+  go("diary");
+  openDiary(day);
 }
 
 function paintMini(list){
@@ -889,10 +917,12 @@ function paintDayMem(list){
 }
 
 var dayPostsAll = [];
+var dayPostsOpen = false;
 function paintDayPosts(list, all){
   dayPostsAll = list;
+  if (all !== undefined) dayPostsOpen = !!all;
   if (!list.length) return '<span style="opacity:.5">这天没写。</span>';
-  var show = all ? list : list.slice(0, 2);
+  var show = dayPostsOpen ? list : list.slice(0, 2);
   var h = show.map(function(p){
     return '<div style="margin-bottom:12px">' +
            '<div style="font-size:10.5px;letter-spacing:.16em;opacity:.5;margin-bottom:4px">' +
@@ -903,13 +933,17 @@ function paintDayPosts(list, all){
            '</div>';
   }).join("");
   if (!all && list.length > 2){
-    h += '<button class="more" onclick="dayPostsMore()">展开剩下的 ' + (list.length - 2) + ' 条</button>';
+  }
+  if (list.length > 2 && !dayPostsOpen){
+    h += '<button class="more" onclick="dayPostsMore()">展开全部 ' + list.length + ' 条 ▾</button>';
+  } else if (list.length > 2 && dayPostsOpen){
+    h += '<button class="more" onclick="dayPostsMore()">收起来 ▴</button>';
   }
   return h;
 }
 function dayPostsMore(){
   var el = $("dayPosts");
-  if (el) el.innerHTML = paintDayPosts(dayPostsAll, true);
+  if (el) el.innerHTML = paintDayPosts(dayPostsAll, !dayPostsOpen);
 }
 
 /* ─────────── 日记（只存，我不读） ─────────── */
@@ -987,7 +1021,7 @@ function openMeta(id){
     var m = d.meta;
     if (!m){
       $("metaTop").innerHTML = '<div class="big">这条没记账</div>' +
-        '<div class="sub">那会儿还没开始记。往后新说的每一句都会带上。</div>';
+        '<div class="sub">那会儿还没开始记账。往后新说的每一句都会带上。</div>';
       return;
     }
     var u = m.usage || {};
@@ -999,22 +1033,21 @@ function openMeta(id){
     var tps = sec > 0 ? (ct / sec) : 0;
     $("metaTop").innerHTML =
       '<div class="big">T' + kfmt(pt) + ' tokens</div>' +
-      '<div class="sub">命中 ' + kfmt(hit) + '　未命中 ' + kfmt(miss) + '</div>' +
-      '<div class="sub">回了 ' + kfmt(ct) + ' tokens　' +
-      tps.toFixed(1) + ' tok/s　' + sec + 's</div>' +
-      '<div class="sub">' + esc(m.model || "") +
+      '<div class="sub">（' + kfmt(hit) + ' cached　' + kfmt(ct) + ' tokens　' +
+      tps.toFixed(1) + ' tok/s　' + sec + 's）</div>' +
+      '<div class="sub">未命中 ' + kfmt(miss) + '　' + esc(m.model || "") +
       (m.rounds ? '　' + m.rounds + ' 轮' : '') +
       (m.images ? '　带了 ' + m.images + ' 张图' : '') + '</div>';
 
     var b = "";
     if (m.tools && m.tools.length){
-      b += '<div class="h">动 过 的 手</div><div>' +
+      b += '<div class="h">调 取 的 工 具</div><div>' +
            m.tools.map(function(t){
              return '<span class="chip2">' + esc(t) + '</span>';
            }).join("") + '</div>';
     }
     if (m.think){
-      b += '<div class="h">想 过 什 么</div><div class="t">' + esc(m.think) + '</div>';
+      b += '<div class="h">思 考 链</div><div class="t">' + esc(m.think) + '</div>';
     }
     if (!b){
       b = '<div class="h">这 一 趟</div><div class="t" style="opacity:.6">' +
