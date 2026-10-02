@@ -347,7 +347,13 @@ def api_calendar(q):
             "SELECT day FROM days WHERE day LIKE ? "
             "AND (yoru_mood<>'' OR yume_mood<>'' OR todos<>'[]')", (prefix,)):
             days.setdefault(r["day"], 0)
-        return {"ok": True, "year": y, "month": m, "marked": days}
+    diary = []
+    if rooms is not None and hasattr(rooms, "diary_days"):
+        try:
+            diary = rooms.diary_days("%04d-%02d-" % (y, m))
+        except Exception:
+            diary = []
+    return {"ok": True, "year": y, "month": m, "marked": days, "diary": diary}
 
 
 def api_memories(q):
@@ -1274,6 +1280,15 @@ def api_chat_send(body):
 
 
 
+def api_mcp_tools():
+    """九只手的名字和说明，给「MCP」那页看的。"""
+    out = []
+    for t in mcp_tools():
+        out.append({"name": t.get("name") or "",
+                    "desc": (t.get("description") or "")[:200]})
+    return {"ok": True, "tools": out}
+
+
 def api_search_providers():
     if websearch is None:
         return {"ok": False, "error": "websearch.py 不在"}
@@ -1729,6 +1744,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "providers": llm.PROVIDERS})
             if p == "/api/presets":
                 return self.send_json({"ok": True, "presets": llm.PRESETS})
+            if p == "/api/mcp/tools":
+                return self.send_json(api_mcp_tools())
             if p == "/api/search/providers":
                 return self.send_json(api_search_providers())
             if p == "/api/whisper":

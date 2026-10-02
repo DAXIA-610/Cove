@@ -64,6 +64,27 @@ def _diary_path(day):
     return os.path.join(DIARY, day + ".md")
 
 
+def diary_days(prefix=""):
+    """有哪几天写了日记。日历上点小点用的。"""
+    os.makedirs(DIARY, exist_ok=True)
+    out = []
+    for name in os.listdir(DIARY):
+        if not name.endswith(".md"):
+            continue
+        day = name[:-3]
+        if not DAY_RE.match(day):
+            continue
+        if prefix and not day.startswith(prefix):
+            continue
+        try:
+            if os.path.getsize(os.path.join(DIARY, name)) == 0:
+                continue
+        except OSError:
+            continue
+        out.append(day)
+    return sorted(out)
+
+
 def diary_list(q):
     os.makedirs(DIARY, exist_ok=True)
     out = []

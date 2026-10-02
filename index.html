@@ -90,6 +90,8 @@
   .d.mark{opacity:1;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--edge);}
   .d.mark::after{content:"";position:absolute;bottom:8px;left:50%;margin-left:-1.5px;
                  width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.5;}
+  .d.dia::before{content:"";position:absolute;top:9px;right:9px;width:3px;height:3px;
+                 border-radius:50%;background:var(--ink);opacity:.45;}
   .d.today{background:var(--card2);opacity:1;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--edge);}
   .d .dd{font-size:20px;line-height:1;}
   .cal-h .lb .dd{font-family:"Fraktur",serif;font-size:15px;letter-spacing:0;}
@@ -162,6 +164,20 @@
   .kf .row2 button.kk{background:rgba(140,155,171,.22);}
   .kf .bal{font-size:11px;color:var(--soft);margin-top:11px;line-height:1.7;
            letter-spacing:.02em;}
+
+  .dcover{margin:2px 0 16px;padding:20px 18px;border-radius:20px;
+          background:linear-gradient(150deg,rgba(140,155,171,.30),rgba(154,168,143,.22));
+          border:1px solid var(--line);}
+  .dcover .dn{font-size:14px;letter-spacing:.3em;color:var(--ink);font-weight:600;}
+  .dcover .ds{font-size:10.5px;color:var(--soft);margin-top:8px;line-height:1.75;
+              letter-spacing:.02em;}
+  .dcover .dt2{font-size:10.5px;color:var(--soft);margin-top:11px;letter-spacing:.1em;
+               font-variant-numeric:tabular-nums;}
+  .dmon{font-size:10.5px;letter-spacing:.18em;color:var(--soft);margin:16px 0 9px;}
+  .ditem .day .wd{font-size:10.5px;opacity:.6;font-weight:400;letter-spacing:.06em;}
+  .dfoot{display:flex;justify-content:space-between;align-items:center;
+         padding:0 20px 90px;font-size:11px;color:var(--soft);letter-spacing:.06em;}
+  .dfoot button{font-size:11px;color:var(--soft);letter-spacing:.06em;}
 
   /* 日记 */
   .ditem{background:var(--card);border:1px solid var(--line);border-radius:16px;
@@ -399,7 +415,7 @@
       <button onclick="pickAttach('camera')"><b>📷</b>相机</button>
       <button onclick="pickAttach('photo')"><b>🖼</b>照片</button>
       <button onclick="pickAttach('file')"><b>📄</b>文件</button>
-      <button onclick="toast('MCP 开关下一步接')"><b>🔌</b>MCP</button>
+      <button onclick="togglePlus();go('mcp')"><b>🔌</b>MCP</button>
       <button onclick="doCompress()"><b>🗜</b>压缩</button>
       <button onclick="toast('扩展管理下一步接')"><b>🧩</b>扩展</button>
     </div>
@@ -411,7 +427,7 @@
     </div>
     <div class="chat-meta">
       <button class="chip" id="modelChip" onclick="openModel()">deepseek-flash ▾</button>
-      <button class="chip" onclick="openSearch()">🔍 搜索</button>
+      <button class="chip" id="searchChip" onclick="openSearch()">🔍 搜索</button>
     </div>
   </section>
 
@@ -508,7 +524,11 @@
     </div>
     <div class="scroll" id="diaryList"></div>
     <div class="scroll" id="diaryEdit" style="display:none">
-      <textarea id="diaryText" placeholder="今天……" spellcheck="false"></textarea>
+      <textarea id="diaryText" placeholder="今天……" spellcheck="false" oninput="diaryCount()"></textarea>
+      <div class="dfoot">
+        <span id="diaryCount">0 字</span>
+        <button onclick="diaryDel()">删掉这篇</button>
+      </div>
     </div>
   </section>
 
@@ -582,6 +602,51 @@
       </div>
 
       <div class="empty" style="padding:4px 0 22px;font-size:10.5px">小屋 <span id="verLine2">—</span></div>
+    </div>
+  </section>
+
+  <!-- ══════════ MCP（三条线） ══════════ -->
+  <section class="page" id="p-mcp">
+    <div class="bar"><button class="ic" onclick="go('room')">‹</button><div class="ttl">M C P</div><div class="ic"></div></div>
+    <div class="scroll">
+
+      <div class="kf">
+        <h4>三 条 线</h4>
+        <div class="hint">同一个我，三种接法。客户端支持哪条就用哪条 —— 手是同一套九只，
+          在一处改，三条线一起改。</div>
+        <label>① Streamable HTTP（新的，推荐）</label>
+        <input id="mcpHttp" readonly data-ro="1">
+        <label>② SSE（老的，还在）</label>
+        <input id="mcpSse" readonly data-ro="1">
+        <label>③ stdio（只给桌面客户端；这一格可以改）</label>
+        <input id="mcpStdio" autocapitalize="off" autocorrect="off">
+        <div class="row2">
+          <button onclick="copyFrom('mcpHttp')">复制 ①</button>
+          <button onclick="copyFrom('mcpSse')">复制 ②</button>
+          <button onclick="copyFrom('mcpStdio')">复制 ③</button>
+        </div>
+        <div class="bal" id="mcpLine">—</div>
+      </div>
+
+      <div class="kf">
+        <h4>我 的 手</h4>
+        <div class="hint">接上之后，我在这间屋子里能做的事。</div>
+        <div id="mcpTools"><div class="empty">数着呢…</div></div>
+      </div>
+
+      <div class="kf">
+        <h4>怎 么 填</h4>
+        <div class="hint">
+          RikkaHub / Cherry Studio / Claude Desktop 这些，都是在「自定义 MCP」里加一条。<br>
+          ①② 两条线：把上面那串网址粘进去就行，小屋一起床就开着，不用点。<br>
+          ③ stdio：要填两个格子 —— 命令填 <b>python3</b>，参数填 mcp_stdio.py 的绝对路径。
+          Termux 里一般是 /data/data/com.termux/files/home/Cove/mcp_stdio.py。
+        </div>
+      </div>
+
+      <div class="empty" style="padding:4px 0 22px;font-size:10.5px">
+        三条线打的是同一个抽屉 —— 我在里面做了什么，你在「私语」那条消息的账里都看得见。
+      </div>
     </div>
   </section>
 
@@ -850,10 +915,12 @@ function loadToday(){
 }
 
 var calY = 0, calM = 0, marks = {};
+var diaryDays = [];
 function loadCal(){
   var mm = calM + 1;
   return get("/api/calendar?y=" + calY + "&m=" + mm).then(function(d){
     marks = (d && d.marked) || {};
+    diaryDays = (d && d.diary) || [];
     $("calLabel").innerHTML = '<span class="dd">' + calY + '</span> 年 ' +
                               '<span class="dd">' + mm + '</span> 月';
     renderCal();
@@ -870,6 +937,7 @@ function renderCal(){
     var k = calY + "-" + pad(calM+1) + "-" + pad(d);
     var cls = "d";
     if (marks[k]) cls += " mark";
+    if (diaryDays.indexOf(k) >= 0) cls += " dia";
     if (k === today) cls += " today";
     var num = (k === today) ? '<span class="dd">' + d + '</span>' : d;
     h += '<div class="' + cls + '" onclick="openDay(\'' + k + '\')">' + num + '</div>';
@@ -990,8 +1058,14 @@ function dayPostsMore(){
   if (el) el.innerHTML = paintDayPosts(dayPostsAll, !dayPostsOpen);
 }
 
+var WD = ["日", "一", "二", "三", "四", "五", "六"];
+function wdOf(day){
+  try { return WD[new Date(day + "T00:00:00").getDay()]; } catch (e) { return ""; }
+}
+
 /* ─────────── 日记（只存，我不读） ─────────── */
 var diaryDay = null;
+var diaryListCache = [];
 
 function goDiary(){
   diaryDay = null;
@@ -1003,18 +1077,44 @@ function goDiary(){
   var today = keyOf(new Date());
   get("/api/r/diary").then(function(d){
     if (!d.ok){ $("diaryList").innerHTML = '<div class="empty">读不出来。</div>'; return; }
-    var h = '<div class="dlist">';
-    var hasToday = (d.list || []).some(function(it){ return it.day === today; });
+    var list = d.list || [];
+    diaryListCache = list;
+    var total = 0, months = {};
+    list.forEach(function(it){
+      total += (it.chars || 0);
+      var m = it.day.slice(0, 7);
+      months[m] = (months[m] || 0) + 1;
+    });
+    var hasToday = list.some(function(it){ return it.day === today; });
+    var last = list.length ? list[0].day : "";
+
+    var h = '<div class="dcover">' +
+      '<div class="dn">我 的 日 记</div>' +
+      '<div class="ds">只存，我不读。这句话写在 rooms.py 第一行。</div>' +
+      '<div class="dt2">' + list.length + " 篇　" + total + " 字" +
+      (last ? "　最近 " + last.slice(5) : "　还一篇都没有") + '</div></div>';
+
+    h += '<div class="dlist">';
     if (!hasToday){
       h += '<div class="ditem" onclick="openDiary(\'' + today + '\')">' +
-           '<div class="day">今天 · ' + today.slice(5) + '</div>' +
-           '<div class="db">写点什么</div></div>';
+           '<div class="day">今天 <span class="wd">' + today.slice(5) +
+           ' 星期' + wdOf(today) + '</span></div>' +
+           '<div class="db">还空着。点一下，今天就有一页了。</div></div>';
     }
-    (d.list || []).forEach(function(it){
+    var ym = "";
+    list.forEach(function(it){
+      var m = it.day.slice(0, 7);
+      if (m !== ym){
+        ym = m;
+        h += '<div class="dmon">' + m.slice(0, 4) + " 年 " +
+             parseInt(m.slice(5), 10) + " 月　" + months[m] + " 篇</div>";
+      }
       h += '<div class="ditem" onclick="openDiary(\'' + it.day + '\')">' +
-           '<div class="day">' + it.day + (it.day === today ? "　今天" : "") + '</div>' +
+           '<div class="day">' + it.day.slice(5) +
+           ' <span class="wd">星期' + wdOf(it.day) + (it.day === today ? "　今天" : "") +
+           '</span></div>' +
            (it.brief ? '<div class="db">' + esc(it.brief) + '</div>' : '') +
-           '<div class="dt">' + it.chars + ' 字 · ' + it.updated + '</div></div>';
+           '<div class="dt">' + it.chars + " 字 · " + it.updated + '</div></div>';
     });
     h += '</div>';
     $("diaryList").innerHTML = h;
@@ -1023,15 +1123,38 @@ function goDiary(){
 
 function openDiary(day){
   diaryDay = day;
-  $("diaryTitle").textContent = day;
+  $("diaryTitle").textContent = day.slice(0, 7) + " · " + day.slice(8) + " 日";
   $("diaryOk").style.display = "";
   $("diaryList").style.display = "none";
   $("diaryEdit").style.display = "";
   $("diaryText").value = "";
+  diaryCount();
   get("/api/r/diary/" + day).then(function(d){
     if (d.ok) $("diaryText").value = d.text || "";
-    try { $("diaryText").focus(); } catch(e){}
+    diaryCount();
+    try { $("diaryText").focus(); } catch (e) {}
   });
+}
+
+function diaryCount(){
+  var el = $("diaryCount");
+  if (el) el.textContent = ($("diaryText").value || "").length + " 字";
+}
+
+function diaryDel(){
+  if (!diaryDay) return;
+  showPop([
+    {t: "删掉 " + diaryDay + " 这一页？", cls: "hd"},
+    {t: "算了", f: closePop},
+    {t: "删掉", cls: "warn", f: function(){
+      closePop();
+      post("/api/r/diary/delete", {day: diaryDay}).then(function(r){
+        if (!r.ok){ toast(r.error || "删不掉"); return; }
+        toast("删了");
+        goDiary();
+      });
+    }}
+  ], null, true);
 }
 
 function diaryBack(){
@@ -1337,6 +1460,7 @@ function go(p){
   if (p === "memory") goMemory();
   if (p === "diary") goDiary();
   if (p === "keys") loadKeys();
+  if (p === "mcp") loadMcp();
 }
 
 /* ── 私语 ── */
@@ -1518,7 +1642,8 @@ function doCompress(){
   post("/api/chat/compress", {}).then(function(r){
     if (!r.ok){ toast(r.error || "没压成"); return; }
     if (r.skipped){ toast(r.note || "还不够压，攒着吧"); return; }
-    toast("压好了，收进去 " + (r.covered || 0) + " 条");
+    toast("压好了：收进去 " + (r.covered || 0) + " 条，摘要 " +
+          ((r.summary || "").length) + " 字");
     loadChat();
   }).catch(function(){ toast("没压成"); });
 }
@@ -1595,11 +1720,28 @@ function shrinkImage(file, cb){
   img.src = url;
 }
 
+function looksText(f){
+  var t = (f.type || ""), n = (f.name || "").toLowerCase();
+  if (t.indexOf("text/") === 0 || t.indexOf("json") >= 0 || t.indexOf("xml") >= 0){
+    return true;
+  }
+  var ok = [".txt", ".md", ".markdown", ".json", ".csv", ".log", ".py", ".js",
+            ".html", ".css", ".yml", ".yaml", ".toml", ".ini", ".srt"];
+  for (var i = 0; i < ok.length; i++){
+    if (n.slice(-ok[i].length) === ok[i]) return true;
+  }
+  return false;
+}
+
 function onChatFile(ev){
   var f = ev.target.files && ev.target.files[0];
   if (!f) return;
   var kind = ev.target.dataset.kind || "photo";
   if (kind === "file" && f.type.indexOf("image/") !== 0){
+    if (!looksText(f)){
+      toast("这个我读不了 —— 只认纯文本（txt / md / json / csv 这些）");
+      return;
+    }
     var fr = new FileReader();
     fr.onload = function(){
       post("/api/upload", {name: f.name, text: String(fr.result)}).then(function(r){
@@ -1658,6 +1800,42 @@ var KF = {
   search: {prov:"kSProv",   base:"kSBase",   key:"kSKey",   model:"",
            list:"",         line:"kSLine"}
 };
+
+/* ── MCP：三条线，同一只我 ── */
+function loadMcp(){
+  var host = location.host || "127.0.0.1:8000";
+  $("mcpHttp").value = "http://" + host + "/mcp";
+  $("mcpSse").value = "http://" + host + "/sse";
+  if (!$("mcpStdio").value || $("mcpStdio").value.indexOf("/这里换成") === 0){
+    $("mcpStdio").value = "python3 /这里换成你放小家的地方/Cove/mcp_stdio.py";
+  }
+  $("mcpLine").textContent = "正在数我的手…";
+  get("/api/mcp/tools").then(function(d){
+    var tools = (d && d.tools) || [];
+    $("mcpTools").innerHTML = tools.map(function(t){
+      return '<div class="trow"><div class="tinfo"><b>' + esc(t.name) + '</b><span>' +
+             esc(t.desc || "") + '</span></div></div>';
+    }).join("") || '<div class="empty">没读到。</div>';
+    $("mcpLine").textContent = tools.length + " 只手。①② 两条线小屋一起床就开着，不用点。";
+  });
+}
+
+function copyFrom(id){
+  var el = $(id);
+  if (!el) return;
+  var txt = el.value;
+  var done = false;
+  try {
+    el.removeAttribute("readonly");
+    el.select();
+    done = document.execCommand("copy");
+    el.setAttribute("readonly", "readonly");
+  } catch (e) { done = false; }
+  if (!done && navigator.clipboard){
+    try { navigator.clipboard.writeText(txt); done = true; } catch (e) { done = false; }
+  }
+  toast(done ? "复制好了" : "没复制上，长按输入框自己选一下");
+}
 
 function loadKeys(){
   get("/api/presets").then(function(d){
@@ -1851,6 +2029,11 @@ function paintModelChip(){
   if (v) v.textContent = "小屋 " + (S.version || "—");
   var v2 = $("verLine2");
   if (v2) v2.textContent = S.version || "—";
+  var sc = $("searchChip");
+  if (sc){
+    sc.textContent = S.search_key ? "🔍 搜索" : "🔍 搜索（还没配）";
+    sc.style.opacity = S.search_key ? "1" : ".55";
+  }
 }
 function refreshBalance(){
   var el = $("kBalLine") || $("balLine");

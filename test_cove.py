@@ -196,6 +196,19 @@ c, d = req(base, "/api/day/2026-10-02")
 chk("读回来对得上", d.get("yume_mood") == "🌤" and d.get("yoru_mood") == "🌙", d)
 c, d = req(base, "/api/calendar?y=2026&m=10")
 chk("日历上有这一天", "2026-10-02" in json.dumps(d.get("marked", {})), d)
+chk("日历带着 diary 那份名单", isinstance(d.get("diary"), list), d.get("diary"))
+c, d = req(base, "/api/r/diary/save", {"day": "2026-10-02", "text": "体检·日记一页"})
+chk("日记存得进去", d.get("ok") and d.get("saved"), d)
+c, d = req(base, "/api/r/diary/2026-10-02")
+chk("日记读得回来", d.get("ok") and d.get("text") == "体检·日记一页", d)
+c, d = req(base, "/api/calendar?y=2026&m=10")
+chk("写过日记的日子会出现在名单里", "2026-10-02" in (d.get("diary") or []), d.get("diary"))
+c, d = req(base, "/api/r/diary")
+chk("日记列表里有那一篇", any(x.get("day") == "2026-10-02" for x in (d.get("list") or [])), d)
+c, d = req(base, "/api/r/diary/delete", {"day": "2026-10-02"})
+chk("日记删得掉", d.get("ok"), d)
+c, d = req(base, "/api/r/day/2026-10-02")
+chk("那天里带着那天的记忆", isinstance(d.get("memories"), list), str(d)[:120])
 c, d = req(base, "/api/day/2026-13-99")
 chk("坏日期被挡", isinstance(d, dict) and not d.get("ok"), d)
 c, d = req(base, "/api/presets")
@@ -225,6 +238,9 @@ c, d = req(base, "/api/chat/unrevoke", {"id": mid})
 chk("能捞回来", d.get("ok"), d)
 c, d = req(base, "/api/chat/edit", {"id": mid, "text": "体检·改过的话"})
 chk("编辑", d.get("ok"), d)
+c, d = req(base, "/api/chat/compress", {})
+chk("压缩按钮点下去不炸（要么压了，要么说还不够）",
+    c == 200 and isinstance(d, dict) and (d.get("ok") or d.get("error")), (c, d))
 c, d = req(base, "/api/chat/send", {"text": "体检·发一句给模型"})
 chk("没填 key 时不崩、好好报错", c == 200 and isinstance(d, dict) and d.get("need_key") and d.get("error"), (c, d))
 
@@ -278,6 +294,10 @@ c, d = req(base, "/mcp")
 chk("GET /mcp 有回应", c == 200, (c, str(d)[:80]))
 c, d = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
 chk("initialize", d.get("result", {}).get("serverInfo", {}).get("name") == "cove", d)
+c, d = req(base, "/api/mcp/tools")
+chk("GET /api/mcp/tools 有九只手", c == 200 and len(d.get("tools") or []) == 9, str(d)[:150])
+chk("每只手都有名字和一句说明",
+    all(t.get("name") and t.get("desc") for t in (d.get("tools") or [])), d)
 c, d = rpc("tools/list")
 tools = [t["name"] for t in d.get("result", {}).get("tools", [])]
 chk("九只手都在", len(tools) == 9, tools)
@@ -359,6 +379,27 @@ chk("历史里我的每一条都带 reasoning_content",
     bool(_asst) and all(x[1] for x in _asst), _pairs)
 _usr = [x for x in _pairs if x[0] == "user"]
 chk("user 那条没被塞多余字段", bool(_usr) and not any(x[1] for x in _usr), _pairs)
+
+# ── 14. stdio 那条线（桌面客户端用的） ────────────────────────
+print("\n[14] MCP · stdio")
+_inp = (json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18"}}) + "\n" +
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}) + "\n")
+_r = subprocess.run([sys.executable, os.path.join(SRC, "mcp_stdio.py")],
+                    cwd=tmp, input=_inp, capture_output=True, text=True, timeout=60)
+chk("stdio 起的来", _r.returncode == 0, (_r.returncode, _r.stderr[-200:]))
+_lines = [x for x in (_r.stdout or "").splitlines() if x.strip()]
+chk("stdio 回了两条（一行一条 JSON）", len(_lines) == 2, _lines[:3])
+try:
+    _a = json.loads(_lines[0]); _b = json.loads(_lines[1])
+except Exception:
+    _a = _b = {}
+chk("stdio 的 initialize 认得出我",
+    _a.get("result", {}).get("serverInfo", {}).get("name") == "cove", _a)
+chk("stdio 和 http 是同一套手（九只）",
+    len(_b.get("result", {}).get("tools", [])) == 9, str(_b)[:120])
+chk("stdio 不往 stdout 吐别的东西",
+    all(x.strip().startswith("{") for x in _lines), _lines[:2])
 
 srv.kill()
 shutil.rmtree(tmp, ignore_errors=True)
