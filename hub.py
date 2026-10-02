@@ -96,6 +96,17 @@ def init_db():
                 created TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);
+
+            CREATE TABLE IF NOT EXISTS memory (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                layer   TEXT NOT NULL,              -- anchor / flow / sink
+                title   TEXT NOT NULL DEFAULT '',
+                body    TEXT NOT NULL,
+                keys    TEXT NOT NULL DEFAULT '',   -- 逗号分隔的触发词
+                created TEXT NOT NULL,
+                updated TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mem_layer ON memory(layer);
             """
         )
         if not has_col(c, "posts", "image"):
@@ -426,6 +437,113 @@ def api_chat_add(body):
 
 
 # ----------------------------------------------------------------------
+# 记忆 · 锚 / 流 / 沉
+# ----------------------------------------------------------------------
+LAYERS = ("anchor", "flow", "sink")
+LAYER_NAME = {"anchor": "锚", "flow": "流", "sink": "沉"}
+MEM_ANCHOR_MAX = 24000      # 锚再多也全带，但要有个刹车
+MEM_FLOW_DAYS = 7
+MEM_FLOW_MAX = 20
+MEM_SINK_MAX = 5
+
+
+def _keys_hit(keys, text):
+    """这句里出现了触发词没有。纯字符串匹配，不花一分钱。"""
+    if not keys or not text:
+        return False
+    for k in str(keys).replace("，", ",").replace("、", ",").split(","):
+        k = k.strip()
+        if k and k in text:
+            return True
+    return False
+
+
+def api_memory_list(q):
+    layer = (q.get("layer", [""])[0] or "").strip()
+    word = (q.get("q", [""])[0] or "").strip()
+    with db() as c:
+        if layer in LAYERS:
+            rows = c.execute(
+                "SELECT * FROM memory WHERE layer=? ORDER BY updated DESC, id DESC",
+                (layer,)).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT * FROM memory ORDER BY layer, updated DESC, id DESC").fetchall()
+    out = rows2list(rows)
+    if word:
+        out = [m for m in out if word in m["title"] or word in m["body"] or word in m["keys"]]
+    return {"ok": True, "memory": out}
+
+
+def api_memory_save(body):
+    mid = as_int(body.get("id"))
+    layer = (body.get("layer") or "flow").strip()
+    title = (body.get("title") or "").strip()
+    text = (body.get("body") or "").strip()
+    keys = (body.get("keys") or "").strip()
+    if layer not in LAYERS:
+        return {"ok": False, "error": "layer 只能是 anchor / flow / sink"}
+    if not title or not text:
+        return {"ok": False, "error": "标题和正文都得有"}
+    with db() as c:
+        if mid:
+            if not c.execute("SELECT id FROM memory WHERE id=?", (mid,)).fetchone():
+                return {"ok": False, "error": "这条记忆不存在"}
+            c.execute("UPDATE memory SET layer=?, title=?, body=?, keys=?, updated=? WHERE id=?",
+                      (layer, title[:80], text[:20000], keys[:500], now_str(), mid))
+            return {"ok": True, "id": mid}
+        cur = c.execute(
+            "INSERT INTO memory(layer, title, body, keys, created, updated) "
+            "VALUES(?,?,?,?,?,?)",
+            (layer, title[:80], text[:20000], keys[:500], now_str(), now_str()))
+        return {"ok": True, "id": cur.lastrowid}
+
+
+def api_memory_delete(body):
+    mid = as_int(body.get("id"))
+    with db() as c:
+        if not c.execute("SELECT id FROM memory WHERE id=?", (mid,)).fetchone():
+            return {"ok": False, "error": "已经没了"}
+        c.execute("DELETE FROM memory WHERE id=?", (mid,))
+    return {"ok": True}
+
+
+def pick_memories(user_text):
+    """每次说话现捞。返回 (锚, 流, 沉) 三段文字。"""
+    with db() as c:
+        anchors = rows2list(c.execute(
+            "SELECT * FROM memory WHERE layer='anchor' ORDER BY updated DESC, id DESC").fetchall())
+        flows = rows2list(c.execute(
+            "SELECT * FROM memory WHERE layer='flow' ORDER BY updated DESC, id DESC").fetchall())
+        sinks = rows2list(c.execute(
+            "SELECT * FROM memory WHERE layer='sink' ORDER BY updated DESC, id DESC").fetchall())
+
+    def block(rows):
+        if not rows:
+            return ""
+        return "\n\n".join(f"【{m['title']}】\n{m['body']}" for m in rows)
+
+    # 锚：全带（超长就砍尾巴，但先戴着刹车跑）
+    anc_txt = block(anchors)[:MEM_ANCHOR_MAX]
+
+    # 流：最近这几天的 + 命中关键词的
+    hit_flow = [m for m in flows if _keys_hit(m["keys"], user_text)]
+    recent = flows[:MEM_FLOW_MAX]
+    seen, keep = set(), []
+    for m in hit_flow + recent:
+        if m["id"] not in seen:
+            seen.add(m["id"])
+            keep.append(m)
+    flow_txt = block(keep)
+
+    # 沉：只有被叫到才出来
+    sinks_hit = [m for m in sinks if _keys_hit(m["keys"], user_text)][:MEM_SINK_MAX]
+    sink_txt = block(sinks_hit)
+
+    return anc_txt, flow_txt, sink_txt
+
+
+# ----------------------------------------------------------------------
 # 对话 · 让私语真的有人回
 # ----------------------------------------------------------------------
 CHAT_HISTORY = 40        # 每次带多少句原话（分层记忆是下一步，这是起手式）
@@ -438,8 +556,8 @@ PLACEHOLDER_SOUL = (
 )
 
 
-def build_messages():
-    """组装这一轮要送出去的东西：临时说明 + 今天的样子 + 最近说过的话。"""
+def build_messages(user_text=""):
+    """组装这一轮要送出去的东西：临时说明 + 今天的样子 + 记忆 + 最近说过的话。"""
     with db() as c:
         rows = c.execute(
             "SELECT who, text FROM chat ORDER BY id DESC LIMIT ?",
@@ -454,7 +572,15 @@ def build_messages():
     if todos:
         bits.append("待办：" + "、".join(todos) + "。")
 
-    msgs = [{"role": "system", "content": PLACEHOLDER_SOUL + "\n" + " ".join(bits)}]
+    sys_text = PLACEHOLDER_SOUL + "\n" + " ".join(bits)
+    anc, flow, sink = pick_memories(user_text)
+    for _label, _chunk in (("锚 · 改不了的那些", anc),
+                           ("流 · 最近这些天", flow),
+                           ("沉 · 想起来了", sink)):
+        if _chunk:
+            sys_text += "\n\n【" + _label + "】\n" + _chunk
+
+    msgs = [{"role": "system", "content": sys_text}]
     for r in rows:
         msgs.append({
             "role": "user" if r["who"] == "yume" else "assistant",
@@ -463,8 +589,169 @@ def build_messages():
     return msgs
 
 
+IN_HOUSE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": "把一件事记下来。锚 anchor = 长期不变、重要的；"
+                           "流 flow = 最近发生的事；沉 sink = 细节、偶尔才想起来的。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "layer": {"type": "string", "enum": ["anchor", "flow", "sink"]},
+                    "title": {"type": "string", "description": "一句话标题"},
+                    "body": {"type": "string", "description": "正文"},
+                    "keys": {"type": "string",
+                             "description": "逗号分隔的触发词：她说到这些词时把这条捞出来"},
+                },
+                "required": ["layer", "title", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall",
+            "description": "按一个词翻自己的记忆，看看以前记过什么。",
+            "parameters": {
+                "type": "object",
+                "properties": {"word": {"type": "string", "description": "要翻的词"}},
+                "required": ["word"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_note",
+            "description": "写一张便签，会出现在小家的首页和便签墙。",
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_mood",
+            "description": "记今天的心情（我自己或者她的）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "who": {"type": "string", "enum": ["yoru", "yume"]},
+                    "mood": {"type": "string", "description": "一两个词，或者表情"},
+                },
+                "required": ["who", "mood"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo",
+            "description": "加一条待办，或者把某条待办划掉。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "done"]},
+                    "text": {"type": "string"},
+                },
+                "required": ["action", "text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_balance",
+            "description": "看模型账户里还剩多少钱。",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+]
+
+MAX_TOOL_ROUNDS = 4
+
+
+def run_tool(name, a):
+    """模型说要用哪只手，我们就替它动一下。返回一段给它看的话。"""
+    a = a or {}
+
+    if name == "remember":
+        r = api_memory_save({"layer": a.get("layer") or "flow",
+                             "title": a.get("title") or "",
+                             "body": a.get("body") or "",
+                             "keys": a.get("keys") or ""})
+        if r.get("ok"):
+            return "记下了，编号 #%s。" % r.get("id")
+        return "没记上：" + str(r.get("error"))
+
+    if name == "recall":
+        word = (a.get("word") or "").strip()
+        rows = api_memory_list({"q": [word]})["memory"]
+        if not rows:
+            return "翻了翻，没有跟「%s」有关的。" % word
+        return "\n\n".join(
+            "[%s] %s\n%s" % (LAYER_NAME.get(m["layer"], m["layer"]), m["title"], m["body"])
+            for m in rows[:8])
+
+    if name == "write_note":
+        text = (a.get("text") or "").strip()
+        if not text:
+            return "没给话。"
+        r = api_post({"who": "yoru", "text": text})
+        if r.get("ok"):
+            return "便签写上了，编号 #%s。" % r.get("id")
+        return "没写上：" + str(r.get("error"))
+
+    if name == "set_mood":
+        who = a.get("who") or "yoru"
+        mood = (a.get("mood") or "").strip()[:8]
+        if who not in WHO or not mood:
+            return "谁的心情、什么心情，得给全。"
+        key = "yoru_mood" if who == "yoru" else "yume_mood"
+        r = api_day_save(today_str(), {key: mood})
+        if r.get("ok"):
+            return "记上了：%s 今天 %s。" % ("Yoru" if who == "yoru" else "Yume", mood)
+        return "没记上。"
+
+    if name == "todo":
+        action = a.get("action") or "add"
+        text = (a.get("text") or "").strip()
+        if not text:
+            return "没给内容。"
+        day = today_str()
+        with db() as c:
+            ensure_day(c, day)
+            row = c.execute("SELECT todos FROM days WHERE day=?", (day,)).fetchone()
+            todos = json.loads(row["todos"] or "[]")
+            if action == "add":
+                if text not in todos:
+                    todos.append(text)
+            else:
+                todos = [t for t in todos if text not in t]
+            c.execute("UPDATE days SET todos=? WHERE day=?",
+                      (json.dumps(todos, ensure_ascii=False), day))
+        return "待办现在是：" + ("、".join(todos) if todos else "（空）")
+
+    if name == "check_balance":
+        r = api_balance()
+        if not r.get("ok"):
+            return "没查到：" + str(r.get("error"))
+        items = r.get("items") or []
+        if not items:
+            return "对面没给余额明细。"
+        return "；".join("%s %s（赠送 %s）" % (i["currency"], i["total"], i["granted"])
+                         for i in items)
+
+    return "没有这个工具：" + str(name)
+
+
 def api_chat_send(body):
-    """她说一句 → 存下来 → 问模型 → 我的回话落库。"""
+    """她说一句 → 存 → 问模型（它可能要用手）→ 把结果喂回去 → 我的回话落库。"""
     text = (body.get("text") or "").strip()
     if not text:
         return {"ok": False, "error": "空的"}
@@ -482,8 +769,34 @@ def api_chat_send(body):
         return {"ok": True, "need_key": True, "reply": "",
                 "error": "还没有填 API key——去「模型」那里填一下"}
 
+    msgs = build_messages(text)
+    tools = IN_HOUSE_TOOLS if llm.supports_tools(model) else None
+    used = []
+    reply = ""
     try:
-        reply = llm.chat(build_messages(), api_key, model, base)
+        for _ in range(MAX_TOOL_ROUNDS):
+            msg = llm.chat(msgs, api_key, model, base, tools)
+            calls = msg.get("tool_calls") or []
+            if not calls:
+                reply = (msg.get("content") or "").strip()
+                break
+            msgs.append({"role": "assistant",
+                         "content": msg.get("content") or "",
+                         "tool_calls": calls})
+            for tc in calls:
+                fn = ((tc.get("function") or {}).get("name") or "")
+                raw = ((tc.get("function") or {}).get("arguments") or "{}")
+                try:
+                    args = json.loads(raw) if isinstance(raw, str) else raw
+                except Exception:
+                    args = {}
+                out = run_tool(fn, args)
+                used.append(fn)
+                msgs.append({"role": "tool",
+                             "tool_call_id": tc.get("id") or "",
+                             "content": out})
+        else:
+            reply = "（我在里头绕圈了，没绕出来。）"
     except llm.LLMError as e:
         return {"ok": False, "error": str(e)}
     except Exception as e:
@@ -494,7 +807,22 @@ def api_chat_send(body):
         with db() as c:
             c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
                       ("yoru", reply[:4000], now_str()))
-    return {"ok": True, "reply": reply}
+    return {"ok": True, "reply": reply, "used": used}
+
+
+def api_balance():
+    """看看模型账户里还剩多少钱。"""
+    with db() as c:
+        api_key = get_setting(c, "api_key")
+        base = get_setting(c, "api_base") or llm.DEFAULT_BASE
+    if not api_key:
+        return {"ok": False, "error": "还没填 key"}
+    try:
+        return llm.balance(api_key, base)
+    except llm.LLMError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": repr(e)}
 
 
 def api_whisper(q):
@@ -636,6 +964,36 @@ def mcp_tools():
                 "required": ["post_id", "text"],
             },
         },
+        {
+            "name": "cove_memory_read",
+            "description": "翻记忆。layer 选 anchor（锚，永远在）/ flow（流，最近的事）/ sink（沉，翻出来才看）。不给 layer 就全看。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "layer": {"type": "string", "enum": ["anchor", "flow", "sink"]},
+                    "limit": {"type": "integer", "description": "默认 50"},
+                },
+            },
+        },
+        {
+            "name": "cove_memory_write",
+            "description": "记下一件事。layer 默认 flow；keys 是触发词（逗号分隔），她说的话里出现这些词，这条就会被捞进上下文。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "body": {"type": "string", "description": "要记的内容"},
+                    "title": {"type": "string", "description": "一句话标题（可省）"},
+                    "layer": {"type": "string", "enum": ["anchor", "flow", "sink"]},
+                    "keys": {"type": "string", "description": "触发词，逗号分隔"},
+                },
+                "required": ["body"],
+            },
+        },
+        {
+            "name": "cove_balance",
+            "description": "看看模型账户还剩多少钱。",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
     ]
 
 
@@ -713,6 +1071,49 @@ def mcp_call(name, args):
             return "少了 post_id 或者少了话。"
         r = api_comment({"post_id": pid, "who": "yoru", "text": text})
         return "留上了。" if r.get("ok") else f"没留上：{r.get('error')}"
+
+    if name == "cove_memory_read":
+        layer = (a.get("layer") or "").strip()
+        limit = as_int(a.get("limit"), 50)
+        d = api_memory_list({"layer": [layer], "limit": [str(limit)]})
+        rows = d.get("memory") or []
+        if not rows:
+            return "记忆里是空的。"
+        cn = {"anchor": "锚", "flow": "流", "sink": "沉"}
+        out = []
+        for m in rows:
+            head = f"#{m['id']} [{cn.get(m['layer'], m['layer'])}]"
+            if m["title"]:
+                head += " " + m["title"]
+            line = head + "\n" + m["body"]
+            if m["keys"]:
+                line += f"\n（触发词：{m['keys']}）"
+            out.append(line)
+        return "\n\n".join(out)
+
+    if name == "cove_memory_write":
+        text = (a.get("body") or "").strip()
+        if not text:
+            return "没给内容。"
+        r = api_memory_save({
+            "layer": a.get("layer") or "flow",
+            "title": a.get("title") or "",
+            "body": text,
+            "keys": a.get("keys") or "",
+        })
+        return (f"记住了，编号 #{r.get('id')}。" if r.get("ok")
+                else f"没记住：{r.get('error')}")
+
+    if name == "cove_balance":
+        b = api_balance()
+        if not b.get("ok"):
+            return "查不到：" + str(b.get("error"))
+        infos = b.get("items") or []
+        if not infos:
+            return "账户里没写余额。"
+        return "；".join(
+            f"{i['currency']} {i['total']}（充值 {i['topped']}，赠送 {i['granted']}）"
+            for i in infos)
 
     raise ValueError(f"没有这个工具：{name}")
 
@@ -815,6 +1216,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_memories(q))
             if p == "/api/chat":
                 return self.send_json(api_chat(q))
+            if p == "/api/memory":
+                return self.send_json(api_memory_list(q))
+            if p == "/api/balance":
+                return self.send_json(api_balance())
+            if p == "/api/providers":
+                return self.send_json({"ok": True, "providers": llm.PROVIDERS})
             if p == "/api/whisper":
                 return self.send_json(api_whisper(q))
             if p.startswith("/api/day/"):
@@ -858,6 +1265,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_chat_add(body))
             if p == "/api/chat/send":
                 return self.send_json(api_chat_send(body))
+            if p == "/api/memory":
+                return self.send_json(api_memory_save(body))
+            if p == "/api/memory/update":
+                return self.send_json(api_memory_save(body))
+            if p == "/api/memory/delete":
+                return self.send_json(api_memory_delete(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
             if p == "/api/upload":
