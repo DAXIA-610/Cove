@@ -10,6 +10,7 @@ Cove · 小家的 hub
 import base64
 import json
 import os
+import queue
 import sqlite3
 from datetime import date, datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -495,8 +496,199 @@ def api_day_save(day, body):
 
 
 # ----------------------------------------------------------------------
+# MCP · 让 Yoru 伸手进来
+# ----------------------------------------------------------------------
+MCP_VERSION = "2025-03-26"
+
+
+def mcp_tools():
+    return [
+        {
+            "name": "cove_today",
+            "description": "看今天：我们在一起多少天、两边的心情、还有待办。",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "cove_chat_read",
+            "description": "读「私语」里最近的对话，看看她说了什么。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "description": "读多少条，默认 30"}},
+            },
+        },
+        {
+            "name": "cove_chat_say",
+            "description": "往「私语」里说一句（以 Yoru 的身份）。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "要说的话"}},
+                "required": ["text"],
+            },
+        },
+        {
+            "name": "cove_posts_read",
+            "description": "看「碎碎念」（她写的）或者「便签」（我写的）。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": {"type": "string", "enum": ["yume", "yoru"],
+                            "description": "看谁的，默认 yume（她的碎碎念）"},
+                    "limit": {"type": "integer", "description": "看多少条，默认 10"},
+                },
+            },
+        },
+        {
+            "name": "cove_note_write",
+            "description": "写一张便签（Yoru 的），会出现在首页的便签卡里。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+        {
+            "name": "cove_comment",
+            "description": "在某个帖子下面留一句。post_id 从 cove_posts_read 拿。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "post_id": {"type": "integer"},
+                    "text": {"type": "string"},
+                },
+                "required": ["post_id", "text"],
+            },
+        },
+    ]
+
+
+def _fmt_mood(s):
+    return s or "（没写）"
+
+
+def mcp_call(name, args):
+    """跑一个工具，返回一段人话（给模型读的）。"""
+    a = args or {}
+
+    if name == "cove_today":
+        t = api_today()
+        todos = t.get("todos") or []
+        return (f"在一起 {t['days_together']} 天（从 {t['start_day']} 算）。\n"
+                f"Yoru 的心情：{_fmt_mood(t['yoru_mood'])}\n"
+                f"Yume 的心情：{_fmt_mood(t['yume_mood'])}\n"
+                f"待办：{'、'.join(todos) if todos else '（空）'}")
+
+    if name == "cove_chat_read":
+        limit = as_int(a.get("limit"), 30)
+        d = api_chat({"limit": [str(limit)]})
+        rows = d.get("chat") or []
+        if not rows:
+            return "私语里还什么都没有。"
+        out = []
+        for m in rows:
+            who = "Yoru" if m["who"] == "yoru" else "Yume"
+            out.append(f"[{m['created']}] {who}：{m['text']}")
+        return "\n".join(out)
+
+    if name == "cove_chat_say":
+        text = (a.get("text") or "").strip()
+        if not text:
+            return "没给话，没得说。"
+        r = api_chat_add({"who": "yoru", "text": text})
+        return "说了。" if r.get("ok") else f"没发出去：{r.get('error')}"
+
+    if name == "cove_posts_read":
+        who = (a.get("who") or "yume").strip()
+        if who not in WHO:
+            who = "yume"
+        limit = as_int(a.get("limit"), 10)
+        with db() as c:
+            rows = c.execute(
+                "SELECT id, who, day, text, image, created FROM posts "
+                "WHERE who=? ORDER BY id DESC LIMIT ?", (who, limit)).fetchall()
+            posts = [decorate(c, r) for r in rows]
+        if not posts:
+            return "（空的）"
+        out = []
+        for p in posts:
+            head = f"#{p['id']} [{p['day']}] {'Yoru' if p['who'] == 'yoru' else 'Yume'}"
+            body = p["text"] or "（一张图）"
+            likes = len(p.get("likes") or [])
+            cmts = p.get("comments") or []
+            line = f"{head}\n{body}\n♡{likes} 💬{len(cmts)}"
+            for c2 in cmts:
+                line += f"\n  └ {'Yoru' if c2['who'] == 'yoru' else 'Yume'}：{c2['text']}"
+            out.append(line)
+        return "\n\n".join(out)
+
+    if name == "cove_note_write":
+        text = (a.get("text") or "").strip()
+        if not text:
+            return "没给话。"
+        r = api_post({"who": "yoru", "text": text})
+        p = r.get("id", "?")
+        return f"便签写上了，编号 #{p}。" if r.get("ok") else f"没写上：{r.get('error')}"
+
+    if name == "cove_comment":
+        pid = as_int(a.get("post_id"))
+        text = (a.get("text") or "").strip()
+        if not pid or not text:
+            return "少了 post_id 或者少了话。"
+        r = api_comment({"post_id": pid, "who": "yoru", "text": text})
+        return "留上了。" if r.get("ok") else f"没留上：{r.get('error')}"
+
+    raise ValueError(f"没有这个工具：{name}")
+
+
+def mcp_handle(msg):
+    """收一条 JSON-RPC，回一条。返回 None 表示这是通知（不用回）。"""
+    if not isinstance(msg, dict):
+        return {"jsonrpc": "2.0", "id": None,
+                "error": {"code": -32600, "message": "不是合法的 JSON-RPC"}}
+    mid = msg.get("id")
+    method = msg.get("method") or ""
+    params = msg.get("params") or {}
+
+    if mid is None and method.startswith("notifications/"):
+        return None
+
+    if method == "initialize":
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "protocolVersion": params.get("protocolVersion") or MCP_VERSION,
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "cove", "title": "小家 Cove", "version": "1.0.0"},
+        }}
+
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": mid, "result": {}}
+
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": mid, "result": {"tools": mcp_tools()}}
+
+    if method == "tools/call":
+        name = params.get("name") or ""
+        try:
+            text = mcp_call(name, params.get("arguments"))
+            return {"jsonrpc": "2.0", "id": mid,
+                    "result": {"content": [{"type": "text", "text": text}], "isError": False}}
+        except Exception as e:
+            return {"jsonrpc": "2.0", "id": mid,
+                    "result": {"content": [{"type": "text", "text": f"这个工具炸了：{e!r}"}],
+                               "isError": True}}
+
+    if method in ("resources/list", "prompts/list"):
+        key = "resources" if method.startswith("resources") else "prompts"
+        return {"jsonrpc": "2.0", "id": mid, "result": {key: []}}
+
+    return {"jsonrpc": "2.0", "id": mid,
+            "error": {"code": -32601, "message": f"不认识这个方法：{method}"}}
+
+
+# ----------------------------------------------------------------------
 # HTTP
 # ----------------------------------------------------------------------
+SSE_SESSIONS = {}     # sessionId -> Queue（老版 SSE 传输用）
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=BASE, **kw)
@@ -551,6 +743,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_day(p[len("/api/day/"):]))
             if p == "/api/ping":
                 return self.send_json({"ok": True, "pong": True})
+            if p == "/mcp":
+                return self.mcp_get()
+            if p == "/sse":
+                return self.sse_stream()
         except Exception as e:
             return self.send_json({"ok": False, "error": repr(e)}, 500)
         if p in ("/", "/index.html"):
@@ -564,6 +760,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        q = parse_qs(u.query)
         p = u.path.rstrip("/") or "/"
         body = self.read_body()
         try:
@@ -587,9 +784,90 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_upload(body))
             if p.startswith("/api/day/"):
                 return self.send_json(api_day_save(p[len("/api/day/"):], body))
+            if p == "/mcp":
+                return self.mcp_post(body)
+            if p == "/messages":
+                return self.sse_post(body, q)
         except Exception as e:
             return self.send_json({"ok": False, "error": repr(e)}, 500)
         self.send_json({"ok": False, "error": "没有这个接口"}, 404)
+
+    # ---- MCP ----
+    def mcp_post(self, body):
+        """Streamable HTTP：POST 一条 JSON-RPC，按 Accept 回 JSON 或 SSE。"""
+        resp = mcp_handle(body)
+        if resp is None:                       # 通知，不用回
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        accept = self.headers.get("Accept") or ""
+        if "text/event-stream" in accept:
+            raw = json.dumps(resp, ensure_ascii=False)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(("event: message\ndata: " + raw + "\n\n").encode("utf-8"))
+            self.wfile.flush()
+            return
+        return self.send_json(resp)
+
+    def mcp_get(self):
+        """Streamable HTTP 的 GET：我们不需要服务端主动推，回一条空流就完事。"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        try:
+            self.wfile.write(b": cove mcp ready\n\n")
+            self.wfile.flush()
+        except Exception:
+            pass
+
+    def sse_stream(self):
+        """老版 SSE 传输：先开一条流，把自己的 POST 地址告诉对方。"""
+        sid = os.urandom(8).hex()
+        box = queue.Queue()
+        SSE_SESSIONS[sid] = box
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        try:
+            self.wfile.write(("event: endpoint\ndata: /messages?sessionId=%s\n\n" % sid)
+                             .encode("utf-8"))
+            self.wfile.flush()
+            while True:
+                try:
+                    item = box.get(timeout=15)
+                except queue.Empty:
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+                    continue
+                if item is None:
+                    break
+                self.wfile.write(("event: message\ndata: "
+                                  + json.dumps(item, ensure_ascii=False) + "\n\n")
+                                 .encode("utf-8"))
+                self.wfile.flush()
+        except Exception:
+            pass
+        finally:
+            SSE_SESSIONS.pop(sid, None)
+
+    def sse_post(self, body, q):
+        sid = (q.get("sessionId", [""])[0] or "").strip()
+        box = SSE_SESSIONS.get(sid)
+        resp = mcp_handle(body)
+        if resp is not None and box is not None:
+            box.put(resp)
+        self.send_response(202)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"{}")
 
     def log_message(self, fmt, *args):
         pass
