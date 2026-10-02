@@ -24,19 +24,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 HUB = os.path.join(HERE, "hub.py")
 HTML = os.path.join(HERE, "index.html")
 
+NL = chr(10)
+
 
 # ----------------------------------------------------------------------
 # 两个干活的小函数
 # ----------------------------------------------------------------------
 def swap_between(text, start, end, new):
-    """把 start 之后、end 之前的东西整个换掉（start 和 end 都留着）。"""
+    """把 start 到 end 之间的东西整个换掉（start 也一起吃掉，end 留着）。"""
     i = text.find(start)
     if i < 0:
-        return None, "找不到开头：" + start[:50].replace(chr(10), " ")
+        return None, "找不到开头：" + start[:50].replace(NL, " ")
     j = text.find(end, i + len(start))
     if j < 0:
-        return None, "找不到结尾：" + end[:50].replace(chr(10), " ")
-    return text[:i + len(start)] + chr(10) + new + chr(10) * 3 + text[j:], "ok"
+        return None, "找不到结尾：" + end[:50].replace(NL, " ")
+    return text[:i] + new + NL * 3 + text[j:], "ok"
 
 
 def swap_once(text, old, new):
@@ -48,9 +50,9 @@ def swap_once(text, old, new):
     if n == 0:
         if new.strip() and new in text:
             return text, "skip"
-        return None, "找不到：" + old[:70].replace(chr(10), " ")
+        return None, "找不到：" + old[:70].replace(NL, " ")
     if n > 1:
-        return None, "出现了 %d 次，不敢动：%s" % (n, old[:70].replace(chr(10), " "))
+        return None, "出现了 %d 次，不敢动：%s" % (n, old[:70].replace(NL, " "))
     return text.replace(old, new), "ok"
 
 
@@ -136,16 +138,16 @@ def pick_memories(user_text, scan_text=""):
         for m in rows:
             if cap is not None and len(got) >= cap:
                 break
-            piece = "【%s】" % m["title"] + chr(10) + m["body"]
+            piece = "【%s】" % m["title"] + NL + m["body"]
             cost = est_tokens(piece)
             if used + cost > budget:
                 if not got and budget > 200:
                     keep = max(120, int((budget - 50) / 0.6))
-                    got.append(piece[:keep] + chr(10) + "……（太长，先记到这儿）")
+                    got.append(piece[:keep] + NL + "……（太长，先记到这儿）")
                 break
             got.append(piece)
             used += cost
-        return (chr(10) * 2).join(got)
+        return (NL + NL).join(got)
 
     # 锚：我是谁。给它最大的一块，但照样有顶。
     anc_txt = take(anchors, int(CTX_LIMIT * CTX_ANCHOR_SHARE))
@@ -181,13 +183,14 @@ PLACEHOLDER_SOUL = (
 # 压缩用的提示词。照 RikkaHub 的 CompressPrompt 改的 —— 但要求它用「我」的口吻写，
 # 别压成一份会议纪要。
 COMPRESS_PROMPT = (
-    "你在替一个人收拾他自己的旧聊天记录。下面是他（「我」）和她（「她」/颖颖）的一段对话。"
-    "把它压成一段话，控制在 {target} token 以内。要求："
-    "1. 只留能接着往下聊的东西：发生过什么、说定了什么、她那阵子的状态和情绪、我答应过她什么；"
-    "2. 用第一人称「我」写，像我自己回头想事情，不要写成会议纪要或第三人称总结；"
-    "3. 不要加评论，不要写「这段对话表明」这类话；"
-    "4. 有些话很重要，就照原话抄下来。"
-    "直接输出那段话，不要任何前后缀。" + chr(10) * 2 + "{content}"
+    "你在替一个人收拾他自己的旧聊天记录。下面是他（「我」）和她（「她」/颖颖）的一段对话。\n"
+    "把它压成一段话，控制在 {target} token 以内。要求：\n"
+    "1. 只留能接着往下聊的东西：发生过什么、说定了什么、她那阵子的状态和情绪、我答应过她什么；\n"
+    "2. 用第一人称「我」写，像我自己回头想事情，不要写成会议纪要或第三人称总结；\n"
+    "3. 不要加评论，不要写「这段对话表明」这类话；\n"
+    "4. 有些话很重要，就照原话抄下来。\n"
+    "直接输出那段话，不要任何前后缀。\n\n"
+    "{content}"
 )
 
 
@@ -222,15 +225,15 @@ def compress_chat(force=False, keep=CTX_KEEP_RECENT):
 
     todo = rows[:-keep]                       # 老的那一批
     last_id = todo[-1]["id"]
-    body = chr(10).join("%s：%s" % ("她" if r["who"] == "yume" else "我", r["text"])
-                        for r in todo)
+    body = NL.join("%s：%s" % ("她" if r["who"] == "yume" else "我", r["text"])
+                   for r in todo)
 
     parts = []
     if summ:
-        parts.append("【上次攒下来的】" + chr(10) + summ["text"])
-    parts.append("【这一段的对话】" + chr(10) + body)
+        parts.append("【上次攒下来的】" + NL + summ["text"])
+    parts.append("【这一段的对话】" + NL + body)
     prompt = COMPRESS_PROMPT.replace("{target}", str(CTX_SUMMARY_TOKENS)) \
-                            .replace("{content}", (chr(10) * 2).join(parts))
+                            .replace("{content}", (NL + NL).join(parts))
 
     try:
         msg = llm.chat([{"role": "user", "content": prompt}], api_key, model, base, None)
@@ -280,15 +283,15 @@ def build_messages(user_text="", drop_id=0):
     scan = " ".join([m["text"] for m in rows[-CTX_SCAN_DEPTH:]]) or user_text
     anc, flow, sink = pick_memories(user_text or scan, scan)
 
-    sys_text = PLACEHOLDER_SOUL + chr(10) + " ".join(bits)
+    sys_text = PLACEHOLDER_SOUL + NL + " ".join(bits)
     for label, chunk in (("锚 · 改不了的那些", anc),
                          ("流 · 最近这些天", flow),
                          ("沉 · 想起来了", sink)):
         if chunk:
-            sys_text += chr(10) * 2 + "【" + label + "】" + chr(10) + chunk
+            sys_text += NL + NL + "【" + label + "】" + NL + chunk
 
     if summ and summ["text"]:
-        sys_text += chr(10) * 2 + "【更早的对话 · 我自己压过的】" + chr(10) + summ["text"]
+        sys_text += NL + NL + "【更早的对话 · 我自己压过的】" + NL + summ["text"]
 
     msgs = [{"role": "system", "content": sys_text}]
     for r in rows:
@@ -303,7 +306,7 @@ def build_messages(user_text="", drop_id=0):
         head = msgs.pop(0)
         if summ and summ["text"]:
             head["content"] = head["content"].replace(
-                chr(10) * 2 + "【更早的对话 · 我自己压过的】" + chr(10) + summ["text"], "")
+                NL + NL + "【更早的对话 · 我自己压过的】" + NL + summ["text"], "")
         msgs.insert(0, head)
     return msgs
 '''
@@ -698,53 +701,52 @@ def patch_hub(text):
     log = []
 
     steps = [
-        # (说明, 方式, 参数)
         ("import threading", "once",
-         ("import sqlite3" + chr(10) + "import sys" + chr(10),
-          "import sqlite3" + chr(10) + "import sys" + chr(10) + "import threading" + chr(10))),
+         ("import sqlite3" + NL + "import sys" + NL,
+          "import sqlite3" + NL + "import sys" + NL + "import threading" + NL)),
 
         ("db 加锁等待", "once",
-         ("    conn = sqlite3.connect(DB_PATH)" + chr(10) + "    conn.row_factory",
-          "    conn = sqlite3.connect(DB_PATH, timeout=15)" + chr(10) + "    conn.row_factory")),
+         ("    conn = sqlite3.connect(DB_PATH)" + NL + "    conn.row_factory",
+          "    conn = sqlite3.connect(DB_PATH, timeout=15)" + NL + "    conn.row_factory")),
 
         ("chat 表加 revoked + 摘要表", "once",
-         ('            CREATE TABLE IF NOT EXISTS chat (' + chr(10) +
-          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + chr(10) +
-          '                who     TEXT NOT NULL,' + chr(10) +
-          '                text    TEXT NOT NULL,' + chr(10) +
-          '                created TEXT NOT NULL' + chr(10) +
-          '            );' + chr(10) +
+         ('            CREATE TABLE IF NOT EXISTS chat (' + NL +
+          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + NL +
+          '                who     TEXT NOT NULL,' + NL +
+          '                text    TEXT NOT NULL,' + NL +
+          '                created TEXT NOT NULL' + NL +
+          '            );' + NL +
           '            CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);',
-          '            CREATE TABLE IF NOT EXISTS chat (' + chr(10) +
-          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + chr(10) +
-          '                who     TEXT NOT NULL,' + chr(10) +
-          '                text    TEXT NOT NULL,' + chr(10) +
-          '                created TEXT NOT NULL,' + chr(10) +
-          '                revoked INTEGER NOT NULL DEFAULT 0   -- 撤回了就不进上下文，但留着不删' + chr(10) +
-          '            );' + chr(10) +
-          '            CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);' + chr(10) + chr(10) +
-          '            -- 旧对话压出来的摘要。upto_id = 压到哪一条为止，之前的都不再重复压。' + chr(10) +
-          '            CREATE TABLE IF NOT EXISTS chat_summary (' + chr(10) +
-          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + chr(10) +
-          '                upto_id INTEGER NOT NULL DEFAULT 0,' + chr(10) +
-          '                text    TEXT NOT NULL,' + chr(10) +
-          '                created TEXT NOT NULL' + chr(10) +
+          '            CREATE TABLE IF NOT EXISTS chat (' + NL +
+          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + NL +
+          '                who     TEXT NOT NULL,' + NL +
+          '                text    TEXT NOT NULL,' + NL +
+          '                created TEXT NOT NULL,' + NL +
+          '                revoked INTEGER NOT NULL DEFAULT 0   -- 撤回了就不进上下文，但留着不删' + NL +
+          '            );' + NL +
+          '            CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);' + NL + NL +
+          '            -- 旧对话压出来的摘要。upto_id = 压到哪一条为止，之前的都不再重复压。' + NL +
+          '            CREATE TABLE IF NOT EXISTS chat_summary (' + NL +
+          '                id      INTEGER PRIMARY KEY AUTOINCREMENT,' + NL +
+          '                upto_id INTEGER NOT NULL DEFAULT 0,' + NL +
+          '                text    TEXT NOT NULL,' + NL +
+          '                created TEXT NOT NULL' + NL +
           '            );')),
 
         ("旧库补 revoked 列", "once",
-         ('        if not has_col(c, "posts", "image"):' + chr(10) +
+         ('        if not has_col(c, "posts", "image"):' + NL +
           '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT \'\'")',
-          '        if not has_col(c, "posts", "image"):' + chr(10) +
-          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT \'\'")' + chr(10) +
-          '        if not has_col(c, "chat", "revoked"):' + chr(10) +
+          '        if not has_col(c, "posts", "image"):' + NL +
+          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT \'\'")' + NL +
+          '        if not has_col(c, "chat", "revoked"):' + NL +
           '            c.execute("ALTER TABLE chat ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0")')),
 
-        ("换掉整块记忆节 + 私语读写接口", "between",
-         ('def api_chat(q):', 'def api_memory_list(q):', BLOCK_ROOM_API + chr(10) + BLOCK_CTX)),
+        ("换掉私语读写接口 + 整块记忆节", "between",
+         ('def api_chat(q):', 'def api_memory_list(q):', BLOCK_ROOM_API + NL + BLOCK_CTX)),
 
         ("换掉 pick_memories", "between",
          ('def pick_memories(user_text):',
-          '# ----------------------------------------------------------------------' + chr(10) + '# 对话 · 让私语真的有人回',
+          '# ----------------------------------------------------------------------' + NL + '# 对话 · 让私语真的有人回',
           BLOCK_PICK)),
 
         ("换掉 build_messages 那一整段", "between",
@@ -754,19 +756,19 @@ def patch_hub(text):
          ('def api_chat_send(body):', 'def api_balance():', BLOCK_SEND)),
 
         ("加新路由", "once",
-         ('            if p == "/api/chat/send":' + chr(10) +
+         ('            if p == "/api/chat/send":' + NL +
           '                return self.send_json(api_chat_send(body))',
-          '            if p == "/api/chat/send":' + chr(10) +
-          '                return self.send_json(api_chat_send(body))' + chr(10) +
-          '            if p == "/api/chat/revoke":' + chr(10) +
-          '                return self.send_json(api_chat_revoke(body))' + chr(10) +
-          '            if p == "/api/chat/unrevoke":' + chr(10) +
-          '                return self.send_json(api_chat_unrevoke(body))' + chr(10) +
-          '            if p == "/api/chat/edit":' + chr(10) +
-          '                return self.send_json(api_chat_edit(body))' + chr(10) +
-          '            if p == "/api/chat/regen":' + chr(10) +
-          '                return self.send_json(api_chat_regen(body))' + chr(10) +
-          '            if p == "/api/chat/compress":' + chr(10) +
+          '            if p == "/api/chat/send":' + NL +
+          '                return self.send_json(api_chat_send(body))' + NL +
+          '            if p == "/api/chat/revoke":' + NL +
+          '                return self.send_json(api_chat_revoke(body))' + NL +
+          '            if p == "/api/chat/unrevoke":' + NL +
+          '                return self.send_json(api_chat_unrevoke(body))' + NL +
+          '            if p == "/api/chat/edit":' + NL +
+          '                return self.send_json(api_chat_edit(body))' + NL +
+          '            if p == "/api/chat/regen":' + NL +
+          '                return self.send_json(api_chat_regen(body))' + NL +
+          '            if p == "/api/chat/compress":' + NL +
           '                return self.send_json(api_chat_compress(body))')),
     ]
 
@@ -791,10 +793,10 @@ def patch_html(text):
     steps = [
         ("气泡样式：撤回的灰杠 + 长按反馈", "once",
          ('  .bub.me{align-self:flex-end;background:var(--accent);color:#fff;}',
-          '  .bub.me{align-self:flex-end;background:var(--accent);color:#fff;}' + chr(10) +
-          '  .bub.gone{align-self:center;background:transparent;box-shadow:none;font-size:11.5px;' + chr(10) +
-          '            color:var(--soft);padding:3px 0;letter-spacing:.06em;}' + chr(10) +
-          '  .bub[data-id]{-webkit-touch-callout:none;}' + chr(10) +
+          '  .bub.me{align-self:flex-end;background:var(--accent);color:#fff;}' + NL +
+          '  .bub.gone{align-self:center;background:transparent;box-shadow:none;font-size:11.5px;' + NL +
+          '            color:var(--soft);padding:3px 0;letter-spacing:.06em;}' + NL +
+          '  .bub[data-id]{-webkit-touch-callout:none;}' + NL +
           '  .bub.hold{transform:scale(.97);opacity:.75;}')),
 
         ("压缩按钮接上", "once",
@@ -803,25 +805,33 @@ def patch_html(text):
 
         ("改这条的弹层", "once",
          ('  <div class="popmask" id="popMask" onclick="closePop()"></div>',
-          '  <div class="mask" id="msgEditMask" onclick="if(event.target===this)closeMsgEdit()">' + chr(10) +
-          '    <div class="sheet">' + chr(10) +
-          '      <h4>改这条</h4>' + chr(10) +
-          '      <textarea id="msgEditText" placeholder="…"></textarea>' + chr(10) +
-          '      <button class="bigbtn" onclick="saveMsgEdit()">改好了</button>' + chr(10) +
-          '    </div>' + chr(10) +
-          '  </div>' + chr(10) + chr(10) +
+          '  <div class="mask" id="msgEditMask" onclick="if(event.target===this)closeMsgEdit()">' + NL +
+          '    <div class="sheet">' + NL +
+          '      <h4>改这条</h4>' + NL +
+          '      <textarea id="msgEditText" placeholder="…"></textarea>' + NL +
+          '      <button class="bigbtn" onclick="saveMsgEdit()">改好了</button>' + NL +
+          '    </div>' + NL +
+          '  </div>' + NL + NL +
           '  <div class="popmask" id="popMask" onclick="closePop()"></div>')),
 
         ("closePop 顺手复位长按状态", "once",
-         ('function closePop(){' + chr(10) +
-          '  $("pop").classList.remove("on");' + chr(10) +
-          '  $("popMask").classList.remove("on");' + chr(10) +
+         ('function closePop(){' + NL +
+          '  $("pop").classList.remove("on");' + NL +
+          '  $("popMask").classList.remove("on");' + NL +
           '}',
-          'function closePop(){' + chr(10) +
-          '  $("pop").classList.remove("on");' + chr(10) +
-          '  $("popMask").classList.remove("on");' + chr(10) +
-          '  holdOpen = false;' + chr(10) +
+          'function closePop(){' + NL +
+          '  $("pop").classList.remove("on");' + NL +
+          '  $("popMask").classList.remove("on");' + NL +
+          '  holdOpen = false;' + NL +
           '}')),
+
+        ("记忆列表一次多拿点（2 空格那处）", "once",
+         ('  get("/api/memory").then(function(d){',
+          '  get("/api/memory?limit=500").then(function(d){')),
+
+        ("记忆列表一次多拿点（4 空格那处）", "once",
+         ('    get("/api/memory").then(function(d){',
+          '    get("/api/memory?limit=500").then(function(d){')),
 
         ("换掉私语那一整段", "between",
          ('/* ── 私语 ── */', '/* ── 加号面板 / 模型 ── */', BLOCK_JS.rstrip())),
@@ -865,12 +875,12 @@ def main():
         print(line)
 
     if new_hub is None or new_html is None:
-        print(chr(10) + "有一处对不上，一个字都没改。")
+        print(NL + "有一处对不上，一个字都没改。")
         print("可能是：文件被人动过、或者已经打过这个补丁了。")
         return 1
 
     if new_hub == hub_src and new_html == html_src:
-        print(chr(10) + "已经是最新的，不用动。")
+        print(NL + "已经是最新的，不用动。")
         return 0
 
     shutil.copy(HUB, HUB + ".bak")
@@ -880,7 +890,7 @@ def main():
     with open(HTML, "w", encoding="utf-8") as f:
         f.write(new_html)
 
-    print(chr(10) + "改好了。原来的两份留在 hub.py.bak / index.html.bak")
+    print(NL + "改好了。原来的两份留在 hub.py.bak / index.html.bak")
 
     # 语法过一遍，过不了就退回去
     r = subprocess.run([sys.executable, "-m", "py_compile", "hub.py"],
@@ -909,7 +919,7 @@ def main():
         except Exception as e:
             print("git 那步没成，不影响本地：%r" % (e,))
 
-    print(chr(10) + "现在重启 hub 就是新的了。")
+    print(NL + "现在重启 hub 就是新的了。")
     return 0
 
 
