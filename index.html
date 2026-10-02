@@ -154,8 +154,17 @@
 
   .frow{margin-bottom:12px;}
   .frow label{display:block;font-size:12px;color:rgba(13,50,71,.62);margin-bottom:6px;}
-  .frow input{width:100%;padding:11px 13px;border-radius:12px;border:1px solid rgba(13,50,71,.16);
-              background:rgba(13,50,71,.04);font-size:13.5px;color:#0d3247;outline:none;}
+  .frow input,.frow select{width:100%;padding:11px 13px;border-radius:12px;
+              border:1px solid rgba(13,50,71,.16);background:rgba(13,50,71,.04);
+              font-size:13.5px;color:#0d3247;outline:none;}
+  .bal{font-size:12.5px;color:rgba(13,50,71,.66);padding:10px 2px 2px;letter-spacing:.02em;}
+
+  .memrow{padding:11px 0;border-top:1px solid var(--line);text-align:left;width:100%;display:block;}
+  .memrow:first-of-type{border-top:none;}
+  .memrow b{display:block;font-size:12.5px;color:var(--ink);font-weight:700;margin-bottom:3px;}
+  .memrow span{display:block;font-size:12px;color:var(--soft);line-height:1.6;}
+  .memrow i{display:block;font-size:10.5px;color:var(--accent);font-style:normal;
+            margin-top:4px;opacity:.85;}
 
   .rooms{display:flex;flex-direction:column;gap:13px;margin-top:6px;}
   .room{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 17px;}
@@ -341,6 +350,16 @@
     <div class="scroll" id="toolsBody"></div>
   </section>
 
+  <!-- ══════════ 记忆（星河的第一版骨架） ══════════ -->
+  <section class="page" id="p-memory">
+    <div class="bar">
+      <button class="ic" onclick="go('room')">‹</button>
+      <div class="ttl">记 忆 星 河</div>
+      <button class="ok" onclick="openMem(0)">＋</button>
+    </div>
+    <div class="scroll" id="memBody"></div>
+  </section>
+
   <!-- ══════════ 云层 ══════════ -->
   <section class="page" id="p-room">
     <div class="bar"><button class="ic" onclick="go('home')">‹</button><div class="ttl">云 层</div><div class="ic"></div></div>
@@ -348,7 +367,7 @@
       <div class="rooms">
         <div class="room">
           <h3>☁️ Yoru&#39;s Space</h3>
-          <button class="item" onclick="toast('记忆星河还没搬进来')"><span class="dot"></span>记忆星河<span class="arw">›</span></button>
+          <button class="item" onclick="go('memory')"><span class="dot"></span>记忆星河<span class="arw">›</span></button>
           <button class="item" onclick="toast('还没做')"><span class="dot"></span>拾贝工坊<span class="arw">›</span></button>
           <button class="item" onclick="toast('还没做')"><span class="dot"></span>MCP<span class="arw">›</span></button>
           <button class="item" onclick="toast('还没做')"><span class="dot"></span>Skill<span class="arw">›</span></button>
@@ -436,14 +455,50 @@
         <input id="mBase" placeholder="https://api.deepseek.com" autocapitalize="off" autocorrect="off">
       </div>
       <div class="frow">
-        <label>模型名</label>
-        <input id="mModel" placeholder="deepseek-chat" autocapitalize="off" autocorrect="off">
+        <label>模型</label>
+        <select id="mModelSel" onchange="modelPicked()">
+          <option value="deepseek-chat">deepseek-chat · 快、便宜</option>
+          <option value="deepseek-reasoner">deepseek-reasoner · 会想、慢、贵</option>
+          <option value="__custom">其他（自己填）</option>
+        </select>
+        <input id="mModel" placeholder="模型名" style="margin-top:8px;display:none"
+               autocapitalize="off" autocorrect="off">
       </div>
       <div class="frow">
         <label>API Key（只存在你手机上）</label>
         <input id="mKey" type="password" placeholder="sk-…" autocapitalize="off" autocorrect="off">
       </div>
+      <div class="bal" id="balLine">余额：—</div>
       <button class="bigbtn" onclick="saveModel()">保存</button>
+      <button class="bigbtn" onclick="refreshBalance()">查一下余额</button>
+    </div>
+  </div>
+
+  <div class="mask" id="memMask" onclick="if(event.target===this)closeMem()">
+    <div class="sheet">
+      <h4 id="memTitle">记一件事</h4>
+      <div class="frow">
+        <label>放在哪一层</label>
+        <select id="memLayer">
+          <option value="anchor">锚 · 永远在上下文里</option>
+          <option value="flow">流 · 最近的事（带触发词就按词捞）</option>
+          <option value="sink">沉 · 平时不动，点到词才翻出来</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label>一句话标题（可省）</label>
+        <input id="memT" placeholder="比如：她在找工作">
+      </div>
+      <div class="frow">
+        <label>内容</label>
+        <textarea id="memB" placeholder="记下来的话…"></textarea>
+      </div>
+      <div class="frow">
+        <label>触发词（逗号分隔，可省）</label>
+        <input id="memK" placeholder="工作,面试,投简历" autocapitalize="off" autocorrect="off">
+      </div>
+      <button class="bigbtn" onclick="saveMem()">保存</button>
+      <button class="bigbtn" id="memDel" onclick="delMem()" style="color:#c0392b">删掉这条</button>
     </div>
   </div>
 
@@ -928,7 +983,7 @@ function saveEdit(){
 }
 
 function go(p){
-  ["home","feed","edit","day","chat","room","tools"].forEach(function(x){
+  ["home","feed","edit","day","chat","room","tools","memory"].forEach(function(x){
     var el = $("p-" + x);
     if (el) el.classList.toggle("on", x === p);
   });
@@ -936,6 +991,7 @@ function go(p){
   closePop();
   if (p === "chat") loadChat();
   if (p === "tools") renderTools();
+  if (p === "memory") goMemory();
 }
 
 /* ── 私语 ── */
@@ -987,14 +1043,30 @@ function pickAttach(kind){
 }
 function openModel(){
   $("mBase").value = S.api_base || "https://api.deepseek.com";
-  $("mModel").value = S.model || "deepseek-chat";
+  var m = S.model || "deepseek-chat";
+  if (m === "deepseek-chat" || m === "deepseek-reasoner"){
+    $("mModelSel").value = m;
+    $("mModel").style.display = "none";
+  } else {
+    $("mModelSel").value = "__custom";
+    $("mModel").value = m;
+    $("mModel").style.display = "block";
+  }
   $("mKey").value = S.api_key || "";
   $("modelMask").classList.add("on");
+  refreshBalance();
+}
+function modelPicked(){
+  $("mModel").style.display = ($("mModelSel").value === "__custom") ? "block" : "none";
+}
+function currentModel(){
+  var v = $("mModelSel").value;
+  return (v === "__custom") ? ($("mModel").value.trim() || "deepseek-chat") : v;
 }
 function closeModel(){ $("modelMask").classList.remove("on"); }
 function saveModel(){
   var b = $("mBase").value.trim() || "https://api.deepseek.com";
-  var m = $("mModel").value.trim() || "deepseek-chat";
+  var m = currentModel();
   var k = $("mKey").value.trim();
   S.api_base = b; S.model = m; S.api_key = k;
   post("/api/settings", {api_base:b, model:m, api_key:k}).then(function(){
@@ -1003,6 +1075,99 @@ function saveModel(){
 }
 function paintModelChip(){
   $("modelChip").textContent = (S.model || "deepseek-chat") + " ▾";
+}
+function refreshBalance(){
+  var el = $("balLine");
+  if (!el) return;
+  if (!S.api_key){ el.textContent = "余额：还没填 key"; return; }
+  el.textContent = "余额：查着…";
+  get("/api/balance").then(function(b){
+    if (!b.ok){ el.textContent = "余额：" + (b.error || "查不到"); return; }
+    var infos = b.items || [];
+    if (!infos.length){ el.textContent = "余额：对面没写"; return; }
+    el.textContent = "余额：" + infos.map(function(i){
+      return i.currency + " " + i.total;
+    }).join(" ｜ ");
+  }).catch(function(){ el.textContent = "余额：没连上"; });
+}
+
+/* ── 记忆 ═ 锚 / 流 / 沉 ── */
+var memCur = 0;
+function goMemory(){
+  get("/api/memory").then(function(d){
+    var rows = d.memory || [];
+    var groups = [
+      ["anchor", "锚 · 永远在"],
+      ["flow", "流 · 最近的事"],
+      ["sink", "沉 · 想起来才看"]
+    ];
+    var h = "";
+    groups.forEach(function(g){
+      var list = rows.filter(function(m){ return m.layer === g[0]; });
+      h += '<div class="room"><h3>' + g[1] + '</h3>';
+      if (!list.length){
+        h += '<div class="empty" style="padding:14px 0;font-size:11.5px">空的</div>';
+      } else {
+        list.forEach(function(m){
+          var head = (m.title ? "<b>" + esc(m.title) + "</b>" : "");
+          var cut = m.body.length > 70 ? m.body.slice(0, 70) + "…" : m.body;
+          h += '<button class="memrow" onclick="openMem(' + m.id + ')">' + head +
+               "<span>" + esc(cut) + "</span>" +
+               (m.keys ? "<i>触发：" + esc(m.keys) + "</i>" : "") + "</button>";
+        });
+      }
+      h += "</div>";
+    });
+    h += '<div class="empty" style="padding:18px 0 8px;font-size:11px">' +
+         '锚每次都带；流和沉要她说的话里出现触发词，才会被捞进上下文。</div>';
+    $("memBody").innerHTML = h;
+  });
+}
+function openMem(id){
+  memCur = id || 0;
+  if (id){
+    get("/api/memory").then(function(d){
+      var m = (d.memory || []).filter(function(x){ return x.id === id; })[0];
+      if (!m) return;
+      $("memTitle").textContent = "改一条";
+      $("memLayer").value = m.layer;
+      $("memT").value = m.title || "";
+      $("memB").value = m.body || "";
+      $("memK").value = m.keys || "";
+      $("memDel").style.display = "block";
+      $("memMask").classList.add("on");
+    });
+  } else {
+    $("memTitle").textContent = "记一件事";
+    $("memLayer").value = "flow";
+    $("memT").value = ""; $("memB").value = ""; $("memK").value = "";
+    $("memDel").style.display = "none";
+    $("memMask").classList.add("on");
+  }
+}
+function closeMem(){ $("memMask").classList.remove("on"); }
+function saveMem(){
+  var body = {
+    layer: $("memLayer").value,
+    title: $("memT").value.trim(),
+    body: $("memB").value.trim(),
+    keys: $("memK").value.trim()
+  };
+  if (!body.body){ toast("内容是空的"); return; }
+  var p;
+  if (memCur){ body.id = memCur; p = post("/api/memory/update", body); }
+  else { p = post("/api/memory", body); }
+  p.then(function(r){
+    if (!r.ok){ toast(r.error || "没存上"); return; }
+    closeMem(); goMemory(); toast(memCur ? "改好了" : "记住了");
+  });
+}
+function delMem(){
+  if (!memCur) return;
+  post("/api/memory/delete", {id: memCur}).then(function(r){
+    if (!r.ok){ toast(r.error || "删不掉"); return; }
+    closeMem(); goMemory(); toast("删了");
+  });
 }
 
 /* ── 工具页（照橘瓣那两张抄的架子，开关先只会记） ── */
