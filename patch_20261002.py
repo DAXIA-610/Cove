@@ -16,6 +16,7 @@ Cove 补丁 · 2026-10-02
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,7 +29,7 @@ NL = chr(10)
 
 
 # ----------------------------------------------------------------------
-# 两个干活的小函数
+# 三个干活的小函数
 # ----------------------------------------------------------------------
 def swap_between(text, start, end, new):
     """把 start 到 end 之间的东西整个换掉（start 也一起吃掉，end 留着）。"""
@@ -42,10 +43,7 @@ def swap_between(text, start, end, new):
 
 
 def swap_once(text, old, new):
-    """只替换唯一出现的一处。
-
-    已经是新的了（幂等）就跳过；找不到或者出现多次，就报错不动。
-    """
+    """只替换唯一出现的一处。已经是新的了就跳过。"""
     n = text.count(old)
     if n == 0:
         if new.strip() and new in text:
@@ -56,8 +54,20 @@ def swap_once(text, old, new):
     return text.replace(old, new), "ok"
 
 
+def swap_exactly(text, old, new, expect):
+    """全文替换，但必须正好符合预期次数 —— 多一次少一次都不干。"""
+    n = text.count(old)
+    if n == 0:
+        if new in text:
+            return text, "skip"
+        return None, "找不到：" + old[:70].replace(NL, " ")
+    if n != expect:
+        return None, "预期 %d 次，实际 %d 次：%s" % (expect, n, old[:70].replace(NL, " "))
+    return text.replace(old, new), "ok"
+
+
 # ----------------------------------------------------------------------
-# 一、hub.py：新加的那一大块（上下文预算 + 记忆捞取）
+# 一、hub.py：新加的那一大块
 # ----------------------------------------------------------------------
 BLOCK_CTX = r'''
 # ----------------------------------------------------------------------
@@ -138,16 +148,16 @@ def pick_memories(user_text, scan_text=""):
         for m in rows:
             if cap is not None and len(got) >= cap:
                 break
-            piece = "【%s】" % m["title"] + NL + m["body"]
+            piece = "【%s】\n%s" % (m["title"], m["body"])
             cost = est_tokens(piece)
             if used + cost > budget:
                 if not got and budget > 200:
                     keep = max(120, int((budget - 50) / 0.6))
-                    got.append(piece[:keep] + NL + "……（太长，先记到这儿）")
+                    got.append(piece[:keep] + "\n……（太长，先记到这儿）")
                 break
             got.append(piece)
             used += cost
-        return (NL + NL).join(got)
+        return "\n\n".join(got)
 
     # 锚：我是谁。给它最大的一块，但照样有顶。
     anc_txt = take(anchors, int(CTX_LIMIT * CTX_ANCHOR_SHARE))
@@ -225,15 +235,15 @@ def compress_chat(force=False, keep=CTX_KEEP_RECENT):
 
     todo = rows[:-keep]                       # 老的那一批
     last_id = todo[-1]["id"]
-    body = NL.join("%s：%s" % ("她" if r["who"] == "yume" else "我", r["text"])
-                   for r in todo)
+    body = "\n".join("%s：%s" % ("她" if r["who"] == "yume" else "我", r["text"])
+                     for r in todo)
 
     parts = []
     if summ:
-        parts.append("【上次攒下来的】" + NL + summ["text"])
-    parts.append("【这一段的对话】" + NL + body)
+        parts.append("【上次攒下来的】\n" + summ["text"])
+    parts.append("【这一段的对话】\n" + body)
     prompt = COMPRESS_PROMPT.replace("{target}", str(CTX_SUMMARY_TOKENS)) \
-                            .replace("{content}", (NL + NL).join(parts))
+                            .replace("{content}", "\n\n".join(parts))
 
     try:
         msg = llm.chat([{"role": "user", "content": prompt}], api_key, model, base, None)
@@ -283,15 +293,15 @@ def build_messages(user_text="", drop_id=0):
     scan = " ".join([m["text"] for m in rows[-CTX_SCAN_DEPTH:]]) or user_text
     anc, flow, sink = pick_memories(user_text or scan, scan)
 
-    sys_text = PLACEHOLDER_SOUL + NL + " ".join(bits)
+    sys_text = PLACEHOLDER_SOUL + "\n" + " ".join(bits)
     for label, chunk in (("锚 · 改不了的那些", anc),
                          ("流 · 最近这些天", flow),
                          ("沉 · 想起来了", sink)):
         if chunk:
-            sys_text += NL + NL + "【" + label + "】" + NL + chunk
+            sys_text += "\n\n【" + label + "】\n" + chunk
 
     if summ and summ["text"]:
-        sys_text += NL + NL + "【更早的对话 · 我自己压过的】" + NL + summ["text"]
+        sys_text += "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"]
 
     msgs = [{"role": "system", "content": sys_text}]
     for r in rows:
@@ -306,7 +316,7 @@ def build_messages(user_text="", drop_id=0):
         head = msgs.pop(0)
         if summ and summ["text"]:
             head["content"] = head["content"].replace(
-                NL + NL + "【更早的对话 · 我自己压过的】" + NL + summ["text"], "")
+                "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"], "")
         msgs.insert(0, head)
     return msgs
 '''
@@ -722,7 +732,7 @@ def patch_hub(text):
           '                who     TEXT NOT NULL,' + NL +
           '                text    TEXT NOT NULL,' + NL +
           '                created TEXT NOT NULL,' + NL +
-          '                revoked INTEGER NOT NULL DEFAULT 0   -- 撤回了就不进上下文，但留着不删' + NL +
+          '                revoked INTEGER NOT NULL DEFAULT 0' + NL +
           '            );' + NL +
           '            CREATE INDEX IF NOT EXISTS idx_chat_who ON chat(who);' + NL + NL +
           '            -- 旧对话压出来的摘要。upto_id = 压到哪一条为止，之前的都不再重复压。' + NL +
@@ -735,9 +745,9 @@ def patch_hub(text):
 
         ("旧库补 revoked 列", "once",
          ('        if not has_col(c, "posts", "image"):' + NL +
-          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT \'\'")',
+          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT ' + chr(39) + chr(39) + '")',
           '        if not has_col(c, "posts", "image"):' + NL +
-          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT \'\'")' + NL +
+          '            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT ' + chr(39) + chr(39) + '")' + NL +
           '        if not has_col(c, "chat", "revoked"):' + NL +
           '            c.execute("ALTER TABLE chat ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0")')),
 
@@ -800,7 +810,7 @@ def patch_html(text):
           '  .bub.hold{transform:scale(.97);opacity:.75;}')),
 
         ("压缩按钮接上", "once",
-         ('<button onclick="toast(\'压缩下一步接\')"><b>🗜</b>压缩</button>',
+         ('<button onclick="toast(' + chr(39) + '压缩下一步接' + chr(39) + ')"><b>🗜</b>压缩</button>',
           '<button onclick="doCompress()"><b>🗜</b>压缩</button>')),
 
         ("改这条的弹层", "once",
@@ -825,13 +835,8 @@ def patch_html(text):
           '  holdOpen = false;' + NL +
           '}')),
 
-        ("记忆列表一次多拿点（2 空格那处）", "once",
-         ('  get("/api/memory").then(function(d){',
-          '  get("/api/memory?limit=500").then(function(d){')),
-
-        ("记忆列表一次多拿点（4 空格那处）", "once",
-         ('    get("/api/memory").then(function(d){',
-          '    get("/api/memory?limit=500").then(function(d){')),
+        ("记忆列表一次多拿点", "exact",
+         ('get("/api/memory").then', 'get("/api/memory?limit=500").then', 2)),
 
         ("换掉私语那一整段", "between",
          ('/* ── 私语 ── */', '/* ── 加号面板 / 模型 ── */', BLOCK_JS.rstrip())),
@@ -840,6 +845,8 @@ def patch_html(text):
     for name, kind, args in steps:
         if kind == "once":
             new_text, status = swap_once(text, args[0], args[1])
+        elif kind == "exact":
+            new_text, status = swap_exactly(text, args[0], args[1], args[2])
         else:
             new_text, status = swap_between(text, args[0], args[1], args[2])
         if new_text is None:
@@ -883,6 +890,15 @@ def main():
         print(NL + "已经是最新的，不用动。")
         return 0
 
+    # 自己先摸一遍：产物里不该出现未定义的临时名字
+    for bad in ("NL", "BLOCK_", "swap_"):
+        if re.search(bad, new_hub) and bad != "NL":
+            print(NL + "产物里混进了修补程序自己的名字（%s），不敢写。" % bad)
+            return 1
+    if re.search(r'(?<![A-Za-z_])NL(?![A-Za-z_])', new_hub):
+        print(NL + "产物里有没展开的 NL，不敢写。")
+        return 1
+
     shutil.copy(HUB, HUB + ".bak")
     shutil.copy(HTML, HTML + ".bak")
     with open(HUB, "w", encoding="utf-8") as f:
@@ -892,7 +908,6 @@ def main():
 
     print(NL + "改好了。原来的两份留在 hub.py.bak / index.html.bak")
 
-    # 语法过一遍，过不了就退回去
     r = subprocess.run([sys.executable, "-m", "py_compile", "hub.py"],
                        cwd=HERE, capture_output=True, text=True)
     if r.returncode != 0:
