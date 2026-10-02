@@ -1,4 +1,12 @@
+# 屋子里的东西：只在她手机上，永远不进仓库
 cove.db
-*.pyc
-__pycache__/
+cove.db-*
+pics/
+files/
+diary/
+
+# 机器生成的
 digits.woff2
+__pycache__/
+*.pyc
+*.bak
