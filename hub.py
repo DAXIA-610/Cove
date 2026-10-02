@@ -47,6 +47,18 @@ MAX_UPLOAD = 8 * 1024 * 1024      # 单张图上限 8MB
 YORU_KEY = "cove-yoru-0714"       # Yoru 自己的暗门，只有他知道
 
 
+def _read_version():
+    """版本号就一个文件的事 —— 以后先 `cat VERSION` 再说话。"""
+    try:
+        with open(os.path.join(BASE, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "?"
+    except Exception:
+        return "?"
+
+
+VERSION = _read_version()
+
+
 # ----------------------------------------------------------------------
 # 数据库
 # ----------------------------------------------------------------------
@@ -246,7 +258,7 @@ def api_today():
             )
         out = {
             "ok": True, "day": t, "days_together": days_together(),
-            "start_day": START_DAY,
+            "start_day": START_DAY, "version": VERSION,
             "note": notes.get("yoru"), "whisper": notes.get("yume"),
             "yoru_mood": d["yoru_mood"], "yume_mood": d["yume_mood"],
             "todos": json.loads(d["todos"] or "[]"),
@@ -890,13 +902,16 @@ def build_messages(user_text="", drop_id=0):
         if r.get("image") and r["id"] in img_ids:
             data = _img_data_url(r["image"])
             if data:
-                msgs.append({
+                one = {
                     "role": role,
                     "content": [
                         {"type": "text", "text": text or "（看这张）"},
                         {"type": "image_url", "image_url": {"url": data}},
                     ],
-                })
+                }
+                if role == "assistant":
+                    one["reasoning_content"] = ""
+                msgs.append(one)
                 continue
         if r.get("image"):
             text = (text + "　").strip() + "[图]"
@@ -904,7 +919,11 @@ def build_messages(user_text="", drop_id=0):
             body_txt = _read_attach(r["file"])
             if body_txt:
                 text = "【附件】" + NL + body_txt + NL + "【附件完】" + NL + text
-        msgs.append({"role": role, "content": text})
+        if role == "assistant":
+            # 老轮次没存思考原文，但字段得占着 —— 对面认字段不认内容
+            msgs.append({"role": role, "content": text, "reasoning_content": ""})
+        else:
+            msgs.append({"role": role, "content": text})
 
     # 最后一道闸：真超了就开始丢，从最不疼的地方丢。
     total = est_tokens(sys_text) + sum(est_tokens(r["text"] or "") for r in rows)
@@ -1153,8 +1172,10 @@ def _generate(user_text, drop_id=0):
             if not calls:
                 reply = (msg.get("content") or "").strip()
                 break
+            # 思考模式 + tools：这一趟想过的必须原样带回去，不然对面 400
             msgs.append({"role": "assistant",
                          "content": msg.get("content") or "",
+                         "reasoning_content": msg.get("reasoning_content") or "",
                          "tool_calls": calls})
             for tc in calls:
                 fn = ((tc.get("function") or {}).get("name") or "")
@@ -1175,9 +1196,14 @@ def _generate(user_text, drop_id=0):
     except Exception as e:
         return {"ok": False, "error": repr(e)}
 
+    try:
+        n_img = sum(1 for m in msgs if isinstance(m.get("content"), list))
+    except Exception:
+        n_img = 0
     meta = {
         "rounds": rounds,
         "model": model,
+        "images": n_img,
         "tools": used,
         "think": think,
         "usage": dict(llm.USAGE_TOTAL),

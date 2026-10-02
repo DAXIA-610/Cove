@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 
 DEFAULT_BASE = "https://api.deepseek.com"
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-flash"     # 旧名字 deepseek-chat 2026-07-24 下线了
 TIMEOUT = 180
 
 # 上一次调用，对面回的完整那一份（usage 就在里面）。hub 拿它算 token。

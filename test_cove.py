@@ -135,6 +135,7 @@ for p in ("/api/today", "/api/posts", "/api/calendar?y=2026&m=10", "/api/day/202
 
 c, d = req(base, "/api/today")
 chk("today 有天数和起始日", d.get("days_together", 0) > 0 and d.get("start_day") == "2026-07-14", d)
+chk("today 带着版本号", bool(d.get("version")) and d["version"] != "?", d.get("version"))
 
 # ── 4. 碎碎念 / 便签 / 点赞 / 评论 ───────────────────────────────
 print("\n[4] 碎碎念")
@@ -298,6 +299,45 @@ c, d = req(base, "/")
 chk("首页能打开", c == 200 and "COVE" in str(d).upper(), c)
 c, d = req(base, "/digits.woff2", raw=None, method="GET")
 chk("字体解码出来了", c == 200 and isinstance(d, (str, bytes)), c)
+
+# ── 13. 那条消息的账（点气泡拉出来的抽屉） ────────────────────
+print("\n[13] 那条消息的账")
+import sqlite3 as _sq
+_c = _sq.connect(os.path.join(tmp, "cove.db"))
+_mid = _c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                  ("yoru", "体检·一条有账的回话", "2026-10-02T12:00:00")).lastrowid
+_c.execute("CREATE TABLE IF NOT EXISTS msg_meta (msg_id INTEGER PRIMARY KEY, data TEXT NOT NULL, created TEXT NOT NULL)")
+_c.execute("INSERT OR REPLACE INTO msg_meta(msg_id, data, created) VALUES(?,?,?)",
+           (_mid, json.dumps({"rounds": 2, "model": "deepseek-flash", "images": 1,
+                              "tools": ["web_search"], "think": "体检·想过",
+                              "seconds": 3.2,
+                              "usage": {"prompt_tokens": 1234, "completion_tokens": 56,
+                                        "prompt_cache_hit_tokens": 1000,
+                                        "prompt_cache_miss_tokens": 234}}), "2026-10-02T12:00:01"))
+_c.commit(); _c.close()
+c, d = req(base, "/api/r/msg/%d" % _mid)
+chk("/api/r/msg 拉得出账", c == 200 and isinstance(d, dict) and d.get("meta"), str(d)[:200])
+_m = (d.get("meta") or {}) if isinstance(d, dict) else {}
+chk("账里有 usage 四个数", (_m.get("usage") or {}).get("prompt_cache_miss_tokens") == 234, _m.get("usage"))
+chk("账里有思考链", _m.get("think") == "体检·想过", _m.get("think"))
+chk("账里有几张图", _m.get("images") == 1, _m.get("images"))
+c, d = req(base, "/api/r/msg/99999")
+chk("没记过账的那条也不炸", c == 200 and isinstance(d, dict), (c, str(d)[:80]))
+
+# 送出去的上下文里，我这边的每条都得带着 reasoning_content 字段（不带对面 400）
+_code = ("import json, hub; ms = hub.build_messages(%s); "
+         "print(json.dumps([(m[\"role\"], \"reasoning_content\" in m) for m in ms]))" % json.dumps("体检"))
+_r = subprocess.run([sys.executable, "-c", _code], cwd=tmp, capture_output=True, text=True)
+chk("能问出上下文长什么样", _r.returncode == 0, (_r.returncode, _r.stderr[-200:]))
+try:
+    _pairs = json.loads(_r.stdout.strip().splitlines()[-1])
+except Exception:
+    _pairs = []
+_asst = [x for x in _pairs if x[0] == "assistant"]
+chk("历史里我的每一条都带 reasoning_content",
+    bool(_asst) and all(x[1] for x in _asst), _pairs)
+_usr = [x for x in _pairs if x[0] == "user"]
+chk("user 那条没被塞多余字段", bool(_usr) and not any(x[1] for x in _usr), _pairs)
 
 srv.kill()
 shutil.rmtree(tmp, ignore_errors=True)

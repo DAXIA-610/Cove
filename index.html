@@ -390,7 +390,7 @@
     </div>
     <div class="chat-meta">
       <button class="chip" id="modelChip" onclick="openModel()">deepseek-flash ▾</button>
-      <button class="chip" onclick="toast('搜索设置还没做')">🔍 搜索</button>
+      <button class="chip" onclick="openSearch()">🔍 搜索</button>
     </div>
   </section>
 
@@ -539,7 +539,7 @@
       <button class="bigbtn" onclick="saveModel()">保存</button>
       <button class="bigbtn" onclick="refreshBalance()">查一下余额</button>
 
-      <h4 style="margin:24px 0 14px">搜索</h4>
+      <h4 id="searchBlock" style="margin:24px 0 14px">搜索</h4>
       <div class="frow">
         <label>哪一家</label>
         <select id="sProv" onchange="paintSearchHint()"></select>
@@ -555,6 +555,7 @@
       <div class="bal" id="sLine">搜索：还没试过</div>
       <button class="bigbtn" onclick="saveSearch()">保存搜索</button>
       <button class="bigbtn" onclick="probeSearch()">试一下</button>
+      <div class="bal" id="verLine">小屋 —</div>
     </div>
   </div>
 
@@ -993,14 +994,17 @@ function openMeta(id){
     var pt = u.prompt_tokens || 0;
     var ct = u.completion_tokens || 0;
     var hit = u.prompt_cache_hit_tokens || 0;
+    var miss = u.prompt_cache_miss_tokens || (pt - hit > 0 ? pt - hit : 0);
     var sec = m.seconds || 0;
     var tps = sec > 0 ? (ct / sec) : 0;
     $("metaTop").innerHTML =
       '<div class="big">T' + kfmt(pt) + ' tokens</div>' +
-      '<div class="sub">' + kfmt(hit) + ' cached　' + ct + ' tokens　' +
+      '<div class="sub">命中 ' + kfmt(hit) + '　未命中 ' + kfmt(miss) + '</div>' +
+      '<div class="sub">回了 ' + kfmt(ct) + ' tokens　' +
       tps.toFixed(1) + ' tok/s　' + sec + 's</div>' +
       '<div class="sub">' + esc(m.model || "") +
-      (m.rounds ? '　' + m.rounds + ' 轮' : '') + '</div>';
+      (m.rounds ? '　' + m.rounds + ' 轮' : '') +
+      (m.images ? '　带了 ' + m.images + ' 张图' : '') + '</div>';
 
     var b = "";
     if (m.tools && m.tools.length){
@@ -1014,7 +1018,7 @@ function openMeta(id){
     }
     if (!b){
       b = '<div class="h">这 一 趟</div><div class="t" style="opacity:.6">' +
-          '没动手，也没有思考链。chat 模型不带这个，切成 reasoner 才有。</div>';
+          '没动手，也没留思考链。</div>';
     }
     $("metaBody").innerHTML = b;
   });
@@ -1329,8 +1333,18 @@ function holdOne(el){
   el.addEventListener("contextmenu", function(e){ e.preventDefault(); });
   el.addEventListener("click", function(){
     if (Date.now() - lastHold < 700) return;
-    if (el.getAttribute("data-who") !== "yoru") return;
-    openMeta(el.getAttribute("data-id"));
+    var id = parseInt(el.getAttribute("data-id"), 10);
+    if (el.getAttribute("data-who") === "yoru"){ openMeta(id); return; }
+    // 点她自己的话：她想看的本来就是"这一趟花了多少" —— 那账挂在我那条回话上
+    for (var i = 0; i < chatMsgs.length; i++){
+      if (chatMsgs[i].id !== id) continue;
+      for (var j = i + 1; j < chatMsgs.length; j++){
+        if (chatMsgs[j].who === "yoru" && !chatMsgs[j].revoked){
+          openMeta(chatMsgs[j].id); return;
+        }
+      }
+      return;
+    }
   });
 }
 
@@ -1343,6 +1357,9 @@ function openMsgMenu(id, x, y){
 
   var isLast = (chatMsgs.length && chatMsgs[chatMsgs.length - 1].id === curMsg.id);
   var items = [];
+  if (curMsg.who === "yoru"){
+    items.push({t:"这条的账", f:function(){ var m = curMsg; closePop(); openMeta(m.id); }});
+  }
   items.push({t:"复制", f:function(){ var m = curMsg; closePop(); copyMsg(m.text); }});
   if (curMsg.who === "yume"){
     items.push({t:"编辑", f:function(){ var m = curMsg; closePop(); openMsgEdit(m); }});
@@ -1544,6 +1561,15 @@ function clearPending(){
 }
 
 
+/* ── 聊天页那个 🔍：拉到抽屉里搜索那一段 ── */
+function openSearch(){
+  openModel();
+  setTimeout(function(){
+    var s = document.getElementById("searchBlock");
+    if (s && s.scrollIntoView) s.scrollIntoView({block: "start"});
+  }, 160);
+}
+
 function openModel(){
   $("mBase").value = S.api_base || "https://api.deepseek.com";
   var m = S.model || "deepseek-flash";
@@ -1635,6 +1661,8 @@ function probeSearch(){
 
 function paintModelChip(){
   $("modelChip").textContent = (S.model || "deepseek-flash") + " ▾";
+  var v = $("verLine");
+  if (v) v.textContent = "小屋 " + (S.version || "—");
 }
 function refreshBalance(){
   var el = $("balLine");
