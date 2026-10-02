@@ -262,7 +262,7 @@ def render(items):
         if it.get("text"):
             lines.append(it["text"])
         lines.append("")
-    return NL.join(lines).strip()
+    return "\n".join(lines).strip()
 
 
 # ----------------------------------------------------------------------
@@ -293,7 +293,7 @@ def probe(key, provider="tavily", base=""):
     except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "n": len(items), "sample": items[:1]}
-'''.replace("return NL.join(lines).strip()", "return \\n".join(lines).strip())
+'''
 
 
 # ======================================================================
@@ -695,7 +695,7 @@ def patch_hub(text):
         ("把 websearch 挂上", "once",
          ("try:" + NL + "    import rooms" + NL + "except Exception:" + NL + "    rooms = None",
           "try:" + NL + "    import rooms" + NL + "except Exception:" + NL + "    rooms = None" + NL + NL +
-          "# 对互联网的那口子：搜索。以后加\"读网页\"之类也只写它" + NL +
+          "# 对互联网的那口子：搜索。以后加读网页之类也只写它" + NL +
           "try:" + NL + "    import websearch" + NL + "except Exception:" + NL + "    websearch = None")),
 
         ("files 目录", "once",
@@ -839,7 +839,7 @@ def patch_hub(text):
           '                })' + NL +
           '                continue' + NL +
           '        if r.get("image"):' + NL +
-          '            text = (text + "\u3000").strip() + "[图]"' + NL +
+          '            text = (text + "　").strip() + "[图]"' + NL +
           '        if r.get("file"):' + NL +
           '            body_txt = _read_attach(r["file"])' + NL +
           '            if body_txt:' + NL +
@@ -973,7 +973,7 @@ def patch_html(text):
           '  .pchip img{width:18px;height:18px;border-radius:4px;margin-right:6px;object-fit:cover;}' + NL +
           '  .pending button{font-size:16px;color:var(--soft);padding:0 8px;}')),
 
-        ("模型下拉改对 + 搜索那一节",
+        ("模型下拉改对",
          ('        <select id="mModelSel" onchange="modelPicked()">' + NL +
           '          <option value="deepseek-chat">deepseek-chat · 快、便宜</option>' + NL +
           '          <option value="deepseek-reasoner">deepseek-reasoner · 会想、慢、贵</option>' + NL +
@@ -1069,14 +1069,13 @@ def main():
         with open(path, "r", encoding="utf-8") as f:
             src = f.read()
         res = fn(src)
-        if isinstance(res, tuple) and len(res) == 2 and res[0] is None:
-            # patch_llm 返回的就是 (text, status)，归一一下
-            new, log = None, [res[1]]
+        if isinstance(res[1], list):
+            new, log = res[0], res[1]
         else:
-            new, log = res
+            new, log = res[0], [res[1]]
         print(os.path.basename(path))
-        for line in log if isinstance(log, list) else [log]:
-            print("  " + str(line) if not str(line).startswith("  ") else str(line))
+        for line in log:
+            print(line if str(line).startswith("  ") else "  " + str(line))
         if new is None:
             print(NL + "有一处对不上，一个字都没改。")
             return 1
