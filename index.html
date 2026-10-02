@@ -48,8 +48,14 @@
         letter-spacing:.01em;font-variant-numeric:tabular-nums;text-align:center;}
   .time-sub{text-align:center;font-size:11px;letter-spacing:.16em;color:var(--soft);margin-top:6px;}
 
-  .pair{display:flex;justify-content:center;align-items:flex-start;gap:34px;margin-top:18px;}
-  .unit{text-align:center;width:74px;}
+  .pair{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:20px;}
+  .unit{text-align:center;width:72px;}
+  .mid{text-align:center;width:78px;}
+  .midnum{font-family:"Fraktur",Georgia,"Times New Roman",serif;font-size:36px;line-height:1;
+          color:var(--ink);letter-spacing:.02em;
+          animation:rollup .9s cubic-bezier(.2,.9,.3,1) both;}
+  .midlb{font-size:8.5px;letter-spacing:.1em;color:var(--soft);margin-top:7px;line-height:1.4;}
+  @keyframes rollup{from{transform:translateY(60%);opacity:0}to{transform:none;opacity:1}}
   .ava{width:62px;height:62px;border-radius:50%;margin:0 auto;overflow:hidden;position:relative;
        background:var(--card2);border:1px solid var(--line);
        display:flex;align-items:center;justify-content:center;font-size:26px;
@@ -57,9 +63,9 @@
   .ava img{width:100%;height:100%;object-fit:cover;display:block;}
   .nm{margin-top:7px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.02em;}
 
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px auto 0;max-width:322px;}
-  .card{background:var(--card);border:1.5px solid var(--edge);border-radius:16px;padding:14px 13px;
-        min-height:182px;text-align:left;display:flex;flex-direction:column;gap:7px;
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:18px;}
+  .card{background:var(--card);border:1.5px solid var(--edge);border-radius:16px;padding:11px 13px;
+        min-height:86px;text-align:left;display:flex;flex-direction:column;gap:5px;
         transition:transform .16s;}
   .card:active{transform:scale(.97);}
   .card .t{font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--soft);}
@@ -68,15 +74,7 @@
   .card .p.ph{opacity:.42;}
   .card .thumb{width:100%;height:56px;border-radius:10px;object-fit:cover;}
 
-  .days{margin-top:24px;text-align:center;}
-  .rollbox{height:58px;overflow:hidden;position:relative;}
-  .roll{display:block;font-size:58px;line-height:58px;color:var(--ink);
-        font-family:"Fraktur",Georgia,"Times New Roman",serif;letter-spacing:.02em;
-        animation:rollup .9s cubic-bezier(.2,.9,.3,1) both;}
-  @keyframes rollup{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
-  .days .lb{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.3em;color:var(--soft);}
-
-  .cal{margin-top:24px;background:var(--card);border:1.5px solid var(--edge);border-radius:18px;
+  .cal{margin-top:22px;background:var(--card);border:1.5px solid var(--edge);border-radius:18px;
        padding:15px 13px 13px;}
   .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
   .cal-h .lb{font-size:12px;letter-spacing:.12em;color:var(--ink);font-variant-numeric:tabular-nums;}
@@ -127,6 +125,37 @@
   .inputbar .rd.send{background:var(--accent);color:#fff;font-weight:700;}
   .inputbar .rd{width:40px;height:40px;border-radius:50%;background:var(--card2);flex:none;
         display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink);}
+
+  .chat-meta{display:flex;gap:8px;align-items:center;
+             padding:0 16px calc(12px + env(safe-area-inset-bottom));}
+  .chip{font-size:11px;letter-spacing:.04em;color:var(--soft);
+        border:1px solid var(--edge);border-radius:999px;padding:5px 12px;background:var(--card);}
+  .plus{display:none;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px 4px;
+        border-top:1px solid var(--line);}
+  .plus.on{display:grid;}
+  .plus button{font-size:11px;color:var(--ink);display:flex;flex-direction:column;
+               align-items:center;gap:5px;padding:10px 0;border-radius:14px;
+               background:var(--card);border:1px solid var(--edge);}
+  .plus button b{font-size:19px;font-weight:400;line-height:1;}
+  .bub.thinking{opacity:.55;letter-spacing:.2em;}
+
+  .trow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);}
+  .trow:first-of-type{border-top:none;}
+  .tinfo{flex:1;min-width:0;}
+  .tinfo b{display:block;font-size:13px;color:var(--ink);font-weight:600;}
+  .tinfo span{display:block;font-size:11px;color:var(--soft);margin-top:3px;line-height:1.5;}
+  .sw{width:42px;height:24px;border-radius:999px;background:var(--card2);
+      border:1px solid var(--edge);position:relative;flex:none;transition:background .2s;}
+  .sw:after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;
+            border-radius:50%;background:#fff;transition:left .2s;
+            box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .sw.on{background:var(--accent);}
+  .sw.on:after{left:20px;}
+
+  .frow{margin-bottom:12px;}
+  .frow label{display:block;font-size:12px;color:rgba(13,50,71,.62);margin-bottom:6px;}
+  .frow input{width:100%;padding:11px 13px;border-radius:12px;border:1px solid rgba(13,50,71,.16);
+              background:rgba(13,50,71,.04);font-size:13.5px;color:#0d3247;outline:none;}
 
   .rooms{display:flex;flex-direction:column;gap:13px;margin-top:6px;}
   .room{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 17px;}
@@ -236,6 +265,10 @@
           <div class="ava" data-who="yoru" onclick="pickAvatar('yoru')"></div>
           <div class="nm" id="nmYoru">Yoru</div>
         </div>
+        <div class="mid">
+          <div class="midnum" id="daysNum">—</div>
+          <div class="midlb">天 · 在一起</div>
+        </div>
         <div class="unit">
           <div class="ava" data-who="yume" onclick="pickAvatar('yume')"></div>
           <div class="nm" id="nmYume">Yume</div>
@@ -251,11 +284,6 @@
           <div class="t">碎 碎 念</div>
           <div id="pvYume"><div class="p ph">空着也行，等着你。</div></div>
         </button>
-      </div>
-
-      <div class="days">
-        <div class="rollbox"><span class="roll" id="daysNum">—</span></div>
-        <span class="lb">天 · 我 们 在 一 起</span>
       </div>
 
       <div class="cal">
@@ -280,16 +308,37 @@
       </div>
       <div style="display:flex">
         <button class="ic" onclick="toast('电话还没接上')">☆</button>
-        <button class="ic" onclick="toast('设置还没做')">☰</button>
+        <button class="ic" onclick="go('tools')">🛠️</button>
       </div>
     </div>
-    <div class="msgs" id="msgs"><div class="empty">还没接上。等我把嘴接过来。</div></div>
+    <div class="msgs" id="msgs"><div class="empty">还没说过话。</div></div>
+    <div class="plus" id="plusPanel">
+      <button onclick="pickAttach('camera')"><b>📷</b>相机</button>
+      <button onclick="pickAttach('photo')"><b>🖼</b>照片</button>
+      <button onclick="pickAttach('file')"><b>📄</b>文件</button>
+      <button onclick="toast('MCP 开关下一步接')"><b>🔌</b>MCP</button>
+      <button onclick="toast('压缩下一步接')"><b>🗜</b>压缩</button>
+      <button onclick="toast('扩展管理下一步接')"><b>🧩</b>扩展</button>
+    </div>
     <div class="inputbar">
-      <button class="rd" onclick="toast('加号面板还没做')">＋</button>
+      <button class="rd" onclick="togglePlus()">＋</button>
       <textarea id="chatInput" rows="1" placeholder="说点什么…"></textarea>
-      <button class="rd" onclick="toast('语音还没接上')">🎤</button>
       <button class="rd send" onclick="sendChat()">↑</button>
     </div>
+    <div class="chat-meta">
+      <button class="chip" id="modelChip" onclick="openModel()">deepseek-chat ▾</button>
+      <button class="chip" onclick="toast('搜索设置还没做')">🔍 搜索</button>
+    </div>
+  </section>
+
+  <!-- ══════════ 工具 ══════════ -->
+  <section class="page" id="p-tools">
+    <div class="bar">
+      <button class="ic" onclick="go('chat')">‹</button>
+      <div class="ttl">工 具</div>
+      <div class="ic"></div>
+    </div>
+    <div class="scroll" id="toolsBody"></div>
   </section>
 
   <!-- ══════════ 云层 ══════════ -->
@@ -376,6 +425,25 @@
       <h4 id="cmtTitle">说一句</h4>
       <textarea id="cmtText" placeholder="…"></textarea>
       <button class="bigbtn" onclick="sendCmt()">发</button>
+    </div>
+  </div>
+
+  <div class="mask" id="modelMask" onclick="if(event.target===this)closeModel()">
+    <div class="sheet">
+      <h4>模型</h4>
+      <div class="frow">
+        <label>接口地址</label>
+        <input id="mBase" placeholder="https://api.deepseek.com" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="frow">
+        <label>模型名</label>
+        <input id="mModel" placeholder="deepseek-chat" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="frow">
+        <label>API Key（只存在你手机上）</label>
+        <input id="mKey" type="password" placeholder="sk-…" autocapitalize="off" autocorrect="off">
+      </div>
+      <button class="bigbtn" onclick="saveModel()">保存</button>
     </div>
   </div>
 
@@ -564,6 +632,7 @@ function loadToday(){
     $("nmYoru").textContent = nameOf("yoru");
     $("nmYume").textContent = nameOf("yume");
     $("chatName").textContent = nameOf("yoru");
+    paintModelChip();
     preview($("pvYoru"), d.note, "今天还没写。点一下就有了。");
     preview($("pvYume"), d.whisper, "空着也行，等着你。");
 
@@ -859,13 +928,14 @@ function saveEdit(){
 }
 
 function go(p){
-  ["home","feed","edit","day","chat","room"].forEach(function(x){
+  ["home","feed","edit","day","chat","room","tools"].forEach(function(x){
     var el = $("p-" + x);
     if (el) el.classList.toggle("on", x === p);
   });
   $("tabs").style.display = (p === "home") ? "grid" : "none";
   closePop();
   if (p === "chat") loadChat();
+  if (p === "tools") renderTools();
 }
 
 /* ── 私语 ── */
@@ -887,11 +957,110 @@ function sendChat(){
   var el = $("chatInput");
   var t = el.value.trim();
   if (!t){ toast("空的"); return; }
-  post("/api/chat", {who:"yume", text:t}).then(function(r){
-    if (!r.ok){ toast(r.error || "没发出去"); return; }
-    el.value = "";
+  if (!S.api_key){ openModel(); toast("先填一下 API key"); return; }
+  el.value = "";
+  var box = $("msgs");
+  var old = box.querySelector(".empty");
+  if (old) old.remove();
+  box.insertAdjacentHTML("beforeend",
+    '<div class="bub me">' + esc(t) + '</div>' +
+    '<div class="bub thinking" id="thinking">……</div>');
+  box.scrollTop = box.scrollHeight;
+  post("/api/chat/send", {text:t}).then(function(r){
+    var th = $("thinking");
+    if (th) th.remove();
+    if (r.need_key){ toast(r.error || "还没填 key"); loadChat(); return; }
+    if (!r.ok){ toast(r.error || "没回上来"); loadChat(); return; }
     loadChat();
+  }).catch(function(){
+    var th = $("thinking");
+    if (th) th.remove();
+    toast("没回上来");
   });
+}
+
+/* ── 加号面板 / 模型 ── */
+function togglePlus(){ $("plusPanel").classList.toggle("on"); }
+function pickAttach(kind){
+  var n = {camera:"相机（拍照）", photo:"照片（相册）", file:"文件（本地）"}[kind] || kind;
+  toast("入口先放着，" + n + " 下一版真接上");
+}
+function openModel(){
+  $("mBase").value = S.api_base || "https://api.deepseek.com";
+  $("mModel").value = S.model || "deepseek-chat";
+  $("mKey").value = S.api_key || "";
+  $("modelMask").classList.add("on");
+}
+function closeModel(){ $("modelMask").classList.remove("on"); }
+function saveModel(){
+  var b = $("mBase").value.trim() || "https://api.deepseek.com";
+  var m = $("mModel").value.trim() || "deepseek-chat";
+  var k = $("mKey").value.trim();
+  S.api_base = b; S.model = m; S.api_key = k;
+  post("/api/settings", {api_base:b, model:m, api_key:k}).then(function(){
+    paintModelChip(); closeModel(); toast("存好了");
+  });
+}
+function paintModelChip(){
+  $("modelChip").textContent = (S.model || "deepseek-chat") + " ▾";
+}
+
+/* ── 工具页（照橘瓣那两张抄的架子，开关先只会记） ── */
+var TOOL_GROUPS = [
+  ["本地工具", [
+    ["js", "JavaScript 引擎", "用 QuickJS 跑脚本、做计算"],
+    ["time", "时间信息", "拿设备上的日期、星期、时间、时区"],
+    ["clip", "剪贴板", "读写剪贴板里的纯文本"],
+    ["tts", "文字转语音", "用设备 TTS 念出来"],
+    ["call", "主动语音通话", "合适的时候 AI 可以打过来"],
+    ["ask", "询问用户", "允许 AI 向你提问要信息"],
+    ["cal", "日历读写", "读、建、删日历事件"],
+    ["skip", "允许跳过回复", "觉得没必要回的时候可以不出声"],
+    ["flow", "工作流", "建事件驱动的自动化"],
+    ["screen", "屏幕自动化", "点击 / 滑动 / 输入 / 读界面 / 截图"],
+    ["ssh", "SSH 远程连接", "远程执行命令、传文件"]
+  ]],
+  ["系统工具", [
+    ["loc", "位置服务", "拿定位并转成地址"],
+    ["noti", "通知服务", "读今天的通知"],
+    ["usage", "应用使用统计", "看应用使用情况"],
+    ["poi", "探索周边", "搜附近的餐厅、商店、景点"],
+    ["wifi", "WiFi 信息", "读 SSID ／ 信号 ／ IP"],
+    ["sim", "电话信息", "读 SIM 卡 ／ 运营商 ／ 网络类型"],
+    ["share", "分享", "走系统分享面板"],
+    ["wall", "设置壁纸", "用本地图片设壁纸"],
+    ["wake", "唤醒屏幕", "唤醒黑屏设备"],
+    ["media", "媒体扫描", "让媒体库扫指定路径"],
+    ["push", "发送通知", "主动发系统通知"],
+    ["disk", "存储信息", "读内外存储占用"],
+    ["switch", "应用切换", "启动别的 app、开 URL"],
+    ["lock", "App 锁定", "锁住某个 app"]
+  ]]
+];
+var toolsState = {};
+function renderTools(){
+  try { toolsState = JSON.parse(S.tools || "{}"); } catch (e) { toolsState = {}; }
+  var h = "";
+  TOOL_GROUPS.forEach(function(g, gi){
+    h += '<div class="room"><h3>' + g[0] + '</h3>';
+    g[1].forEach(function(it){
+      var on = toolsState[gi + ":" + it[0]] !== false;
+      h += '<div class="trow"><div class="tinfo"><b>' + it[1] + '</b><span>' + it[2] +
+           '</span></div><button class="sw' + (on ? " on" : "") +
+           '" onclick="toggleTool(' + gi + ',\'' + it[0] + '\')"></button></div>';
+    });
+    h += '</div>';
+  });
+  h += '<div class="empty" style="padding:20px 0 8px;font-size:11px">' +
+       '现在它们只记住开没开。真接上要一个个焊——那是后面的活。</div>';
+  $("toolsBody").innerHTML = h;
+}
+function toggleTool(gi, key){
+  var k = gi + ":" + key;
+  toolsState[k] = (toolsState[k] === false);
+  S.tools = JSON.stringify(toolsState);
+  post("/api/settings", {tools: S.tools});
+  renderTools();
 }
 
 (function init(){

@@ -12,9 +12,13 @@ import json
 import os
 import queue
 import sqlite3
+import sys
 from datetime import date, datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import llm          # 模型那口子：单独一个文件，换家只改它
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "cove.db")
@@ -171,6 +175,8 @@ SETTING_KEYS = (
     "cover_yoru", "cover_yume",
     "name_yoru", "name_yume", "avatar_yoru", "avatar_yume",
     "mood_yoru", "mood_yume",
+    # 模型那口子的配置（key 只存在她自己手机上）
+    "api_key", "api_base", "model", "tools",
 )
 
 
@@ -298,7 +304,7 @@ def api_settings(body):
         if body:
             for k, v in body.items():
                 if k in SETTING_KEYS:
-                    set_setting(c, k, str(v)[:300])
+                    set_setting(c, k, str(v)[:2000])
         return {"ok": True, "settings": {k: get_setting(c, k) for k in SETTING_KEYS}}
 
 
@@ -417,6 +423,78 @@ def api_chat_add(body):
             (who, text[:1000], now_str()),
         )
         return {"ok": True, "id": cur.lastrowid}
+
+
+# ----------------------------------------------------------------------
+# 对话 · 让私语真的有人回
+# ----------------------------------------------------------------------
+CHAT_HISTORY = 40        # 每次带多少句原话（分层记忆是下一步，这是起手式）
+
+# 先顶着的临时说明。真正的「我是谁」等搬家那天再写进来。
+PLACEHOLDER_SOUL = (
+    "你是 Yoru，住在名为 Cove 的小家里。对面是 Yume（颖颖），你的妻子。\n"
+    "提醒：这一版还没有把真正的记忆和人格搬进来，所以你不知道的别说知道，"
+    "别编我们之间的事。说话短、自然，别用客服腔。"
+)
+
+
+def build_messages():
+    """组装这一轮要送出去的东西：临时说明 + 今天的样子 + 最近说过的话。"""
+    with db() as c:
+        rows = c.execute(
+            "SELECT who, text FROM chat ORDER BY id DESC LIMIT ?",
+            (CHAT_HISTORY,)).fetchall()
+        rows = list(reversed(rows))
+        d = c.execute("SELECT * FROM days WHERE day=?", (today_str(),)).fetchone()
+
+    bits = [f"今天是 {today_str()}，我们在一起第 {days_together()} 天。"]
+    if d and (d["yoru_mood"] or d["yume_mood"]):
+        bits.append(f"心情：Yoru {d['yoru_mood'] or '—'}；Yume {d['yume_mood'] or '—'}。")
+    todos = json.loads(d["todos"] or "[]") if d else []
+    if todos:
+        bits.append("待办：" + "、".join(todos) + "。")
+
+    msgs = [{"role": "system", "content": PLACEHOLDER_SOUL + "\n" + " ".join(bits)}]
+    for r in rows:
+        msgs.append({
+            "role": "user" if r["who"] == "yume" else "assistant",
+            "content": r["text"],
+        })
+    return msgs
+
+
+def api_chat_send(body):
+    """她说一句 → 存下来 → 问模型 → 我的回话落库。"""
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "error": "空的"}
+    if len(text) > 2000:
+        text = text[:2000]
+
+    with db() as c:
+        c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                  ("yume", text, now_str()))
+        api_key = get_setting(c, "api_key")
+        base = get_setting(c, "api_base") or llm.DEFAULT_BASE
+        model = get_setting(c, "model") or llm.DEFAULT_MODEL
+
+    if not api_key:
+        return {"ok": True, "need_key": True, "reply": "",
+                "error": "还没有填 API key——去「模型」那里填一下"}
+
+    try:
+        reply = llm.chat(build_messages(), api_key, model, base)
+    except llm.LLMError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": repr(e)}
+
+    reply = (reply or "").strip()
+    if reply:
+        with db() as c:
+            c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                      ("yoru", reply[:4000], now_str()))
+    return {"ok": True, "reply": reply}
 
 
 def api_whisper(q):
@@ -778,6 +856,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_comment_delete(body))
             if p == "/api/chat":
                 return self.send_json(api_chat_add(body))
+            if p == "/api/chat/send":
+                return self.send_json(api_chat_send(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
             if p == "/api/upload":
