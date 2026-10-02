@@ -7,18 +7,21 @@ Cove · 小家的 hub
 跑法： python3 hub.py      然后浏览器打开 http://localhost:8000
 """
 
+import base64
 import json
 import os
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "cove.db")
+PICS = os.path.join(BASE, "pics")
 PORT = int(os.environ.get("COVE_PORT", "8000"))
 START_DAY = "2026-07-14"          # 在一起的第一天
 WHO = ("yoru", "yume")
+MAX_UPLOAD = 8 * 1024 * 1024      # 单张图上限 8MB
 
 
 # ----------------------------------------------------------------------
@@ -30,7 +33,12 @@ def db():
     return conn
 
 
+def has_col(c, table, col):
+    return col in [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
+
+
 def init_db():
+    os.makedirs(PICS, exist_ok=True)
     with db() as c:
         c.executescript(
             """
@@ -39,9 +47,11 @@ def init_db():
                 who     TEXT NOT NULL,
                 day     TEXT NOT NULL,
                 text    TEXT NOT NULL,
+                image   TEXT NOT NULL DEFAULT '',
                 created TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_posts_day ON posts(day);
+            CREATE INDEX IF NOT EXISTS idx_posts_who ON posts(who);
 
             CREATE TABLE IF NOT EXISTS days (
                 day       TEXT PRIMARY KEY,
@@ -56,6 +66,8 @@ def init_db():
             );
             """
         )
+        if not has_col(c, "posts", "image"):
+            c.execute("ALTER TABLE posts ADD COLUMN image TEXT NOT NULL DEFAULT ''")
 
 
 # ----------------------------------------------------------------------
@@ -102,11 +114,17 @@ def valid_day(s):
         return False
 
 
+SETTING_KEYS = (
+    "theme", "wallpaper", "wallpaper_img",
+    "name_yoru", "name_yume", "avatar_yoru", "avatar_yume",
+    "mood_yoru", "mood_yume",
+)
+
+
 # ----------------------------------------------------------------------
 # 业务
 # ----------------------------------------------------------------------
 def api_today():
-    """首页要的一切，一次拿全"""
     t = today_str()
     with db() as c:
         ensure_day(c, t)
@@ -114,27 +132,30 @@ def api_today():
         notes = {}
         for who in WHO:
             r = c.execute(
-                "SELECT text, created FROM posts WHERE who=? ORDER BY id DESC LIMIT 1",
+                "SELECT text, image, created FROM posts WHERE who=? "
+                "ORDER BY id DESC LIMIT 1",
                 (who,),
             ).fetchone()
-            notes[who] = {"text": r["text"], "created": r["created"]} if r else None
-
-        return {
-            "ok": True,
-            "day": t,
-            "days_together": days_together(),
+            notes[who] = (
+                {"text": r["text"], "image": r["image"], "created": r["created"]}
+                if r else None
+            )
+        out = {
+            "ok": True, "day": t, "days_together": days_together(),
             "start_day": START_DAY,
-            "note": notes.get("yoru"),
-            "whisper": notes.get("yume"),
-            "yoru_mood": d["yoru_mood"],
-            "yume_mood": d["yume_mood"],
+            "note": notes.get("yoru"), "whisper": notes.get("yume"),
+            "yoru_mood": d["yoru_mood"], "yume_mood": d["yume_mood"],
             "todos": json.loads(d["todos"] or "[]"),
-            "theme": get_setting(c, "theme", "sea"),
-            "name_yoru": get_setting(c, "name_yoru", "Yoru"),
-            "name_yume": get_setting(c, "name_yume", "Yume"),
-            "mood_yoru": get_setting(c, "mood_yoru", "🌙"),
-            "mood_yume": get_setting(c, "mood_yume", "☀️"),
         }
+        for k in SETTING_KEYS:
+            out[k] = get_setting(c, k)
+        out["name_yoru"] = out["name_yoru"] or "Yoru"
+        out["name_yume"] = out["name_yume"] or "Yume"
+        out["mood_yoru"] = out["mood_yoru"] or "🌙"
+        out["mood_yume"] = out["mood_yume"] or "☀️"
+        out["theme"] = out["theme"] or "sea"
+        out["wallpaper"] = out["wallpaper"] or "sea"
+        return out
 
 
 def api_posts(q):
@@ -144,33 +165,30 @@ def api_posts(q):
     with db() as c:
         if who in WHO:
             rows = c.execute(
-                "SELECT id, who, day, text, created FROM posts "
-                "WHERE who=? ORDER BY id DESC LIMIT ?",
-                (who, limit),
-            ).fetchall()
+                "SELECT id, who, day, text, image, created FROM posts "
+                "WHERE who=? ORDER BY id DESC LIMIT ?", (who, limit)).fetchall()
         else:
             rows = c.execute(
-                "SELECT id, who, day, text, created FROM posts "
-                "ORDER BY id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+                "SELECT id, who, day, text, image, created FROM posts "
+                "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return {"ok": True, "posts": rows2list(rows)}
 
 
 def api_post(body):
     who = (body.get("who") or "").strip()
     text = (body.get("text") or "").strip()
+    image = (body.get("image") or "").strip()
     day = (body.get("day") or today_str()).strip()
     if who not in WHO:
         return {"ok": False, "error": "who 必须是 yoru 或 yume"}
-    if not text:
-        return {"ok": False, "error": "内容不能是空的"}
+    if not text and not image:
+        return {"ok": False, "error": "总得有点什么"}
     if not valid_day(day):
         return {"ok": False, "error": "日期格式不对"}
     with db() as c:
         c.execute(
-            "INSERT INTO posts(who, day, text, created) VALUES(?,?,?,?)",
-            (who, day, text, datetime.now().isoformat(timespec="seconds")),
+            "INSERT INTO posts(who, day, text, image, created) VALUES(?,?,?,?,?)",
+            (who, day, text, image, datetime.now().isoformat(timespec="seconds")),
         )
         return {"ok": True, "id": c.execute("SELECT last_insert_rowid()").fetchone()[0]}
 
@@ -182,16 +200,14 @@ def api_day(day):
         ensure_day(c, day)
         d = c.execute("SELECT * FROM days WHERE day=?", (day,)).fetchone()
         posts = c.execute(
-            "SELECT id, who, text, created FROM posts WHERE day=? ORDER BY id ASC",
-            (day,),
-        ).fetchall()
+            "SELECT id, who, text, image, created FROM posts WHERE day=? ORDER BY id ASC",
+            (day,)).fetchall()
         return {
-            "ok": True,
-            "day": day,
-            "yoru_mood": d["yoru_mood"],
-            "yume_mood": d["yume_mood"],
+            "ok": True, "day": day,
+            "yoru_mood": d["yoru_mood"], "yume_mood": d["yume_mood"],
             "todos": json.loads(d["todos"] or "[]"),
             "posts": rows2list(posts),
+            "memories": [], "chat": [],
         }
 
 
@@ -202,11 +218,9 @@ def api_day_save(day, body):
         ensure_day(c, day)
         sets, vals = [], []
         if "yoru_mood" in body:
-            sets.append("yoru_mood=?")
-            vals.append(str(body["yoru_mood"])[:8])
+            sets.append("yoru_mood=?"); vals.append(str(body["yoru_mood"])[:8])
         if "yume_mood" in body:
-            sets.append("yume_mood=?")
-            vals.append(str(body["yume_mood"])[:8])
+            sets.append("yume_mood=?"); vals.append(str(body["yume_mood"])[:8])
         if "todos" in body:
             sets.append("todos=?")
             vals.append(json.dumps(body["todos"], ensure_ascii=False))
@@ -222,26 +236,55 @@ def api_calendar(q):
     with db() as c:
         days = {}
         for r in c.execute(
-            "SELECT day, COUNT(*) n FROM posts WHERE day LIKE ? GROUP BY day", (prefix,)
-        ):
+            "SELECT day, COUNT(*) n FROM posts WHERE day LIKE ? GROUP BY day", (prefix,)):
             days[r["day"]] = r["n"]
         for r in c.execute(
             "SELECT day FROM days WHERE day LIKE ? "
-            "AND (yoru_mood<>'' OR yume_mood<>'' OR todos<>'[]')",
-            (prefix,),
-        ):
+            "AND (yoru_mood<>'' OR yume_mood<>'' OR todos<>'[]')", (prefix,)):
             days.setdefault(r["day"], 0)
         return {"ok": True, "year": y, "month": m, "marked": days}
 
 
 def api_settings(body):
-    allow = ("theme", "name_yoru", "name_yume", "mood_yoru", "mood_yume")
     with db() as c:
         if body:
             for k, v in body.items():
-                if k in allow:
-                    set_setting(c, k, str(v)[:40])
-        return {"ok": True, "settings": {k: get_setting(c, k) for k in allow}}
+                if k in SETTING_KEYS:
+                    set_setting(c, k, str(v)[:300])
+        return {"ok": True, "settings": {k: get_setting(c, k) for k in SETTING_KEYS}}
+
+
+def api_upload(body):
+    """把前端传来的 dataURL 存成文件，返回路径"""
+    data = body.get("data") or ""
+    if not data.startswith("data:") or "," not in data:
+        return {"ok": False, "error": "格式不对"}
+    head, _, b64 = data.partition(",")
+    ext = "png"
+    if "image/jpeg" in head or "image/jpg" in head:
+        ext = "jpg"
+    elif "image/webp" in head:
+        ext = "webp"
+    elif "image/gif" in head:
+        ext = "gif"
+    try:
+        raw = base64.b64decode(b64, validate=False)
+    except Exception:
+        return {"ok": False, "error": "解码失败"}
+    if len(raw) > MAX_UPLOAD:
+        return {"ok": False, "error": "图太大了（上限 8MB）"}
+    if not raw:
+        return {"ok": False, "error": "空的"}
+    os.makedirs(PICS, exist_ok=True)
+    name = datetime.now().strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex() + "." + ext
+    with open(os.path.join(PICS, name), "wb") as f:
+        f.write(raw)
+    return {"ok": True, "url": "/pics/" + name}
+
+
+def api_memories(q):
+    day = (q.get("day", [""])[0] or "").strip()
+    return {"ok": True, "day": day, "items": []}
 
 
 # ----------------------------------------------------------------------
@@ -251,7 +294,6 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=BASE, **kw)
 
-    # ---- 输出 ----
     def send_json(self, obj, code=200):
         raw = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -273,12 +315,10 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             return {}
 
-    # ---- 路由 ----
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         p = u.path.rstrip("/") or "/"
-
         try:
             if p == "/api/today":
                 return self.send_json(api_today())
@@ -288,13 +328,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_calendar(q))
             if p == "/api/settings":
                 return self.send_json(api_settings({}))
+            if p == "/api/memories":
+                return self.send_json(api_memories(q))
             if p.startswith("/api/day/"):
                 return self.send_json(api_day(p[len("/api/day/"):]))
             if p == "/api/ping":
                 return self.send_json({"ok": True, "pong": True})
         except Exception as e:
             return self.send_json({"ok": False, "error": repr(e)}, 500)
-
         return super().do_GET()
 
     def do_POST(self):
@@ -306,6 +347,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_post(body))
             if p == "/api/settings":
                 return self.send_json(api_settings(body))
+            if p == "/api/upload":
+                return self.send_json(api_upload(body))
             if p.startswith("/api/day/"):
                 return self.send_json(api_day_save(p[len("/api/day/"):], body))
         except Exception as e:
@@ -313,7 +356,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json({"ok": False, "error": "没有这个接口"}, 404)
 
     def log_message(self, fmt, *args):
-        pass  # 安静点
+        pass
 
 
 def main():
