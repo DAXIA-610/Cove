@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-2026-10-04 · 第六发：记忆星河和潮汐捕梦这两页
+2026-10-04 · 第六发（重写）：记忆星河和潮汐捕梦这两页
 
-她说的（原话）：记忆星河 → 左上角退出 / 中间名称 / 右边留着后期做"记忆网 UI"；
-最上面是添加记忆；锚/流/沉 每段做隐藏，点一下全展开；每条后面一个小铅笔。
-潮汐捕梦 → 关于我的记忆：你记的（名字/性格/家庭）+ 我自己录的（喜好），两人共同编辑；
-顶栏格式和记忆星河一样，右边也留一格。
+为什么要重写：上一版我在 JS 里嵌引号，写成了 openMem(0,'me') 那种，
+补丁里那层反斜杠我一推就多了一层 —— 生成出来的 JS 直接语法错，CI 挂了。
+跟上次"页面卡住"是同一类错。
 
-后端上一发已经分好家了（scope=me / her），这一发把这两页搭出来。
+所以这一版立一条硬规矩：**这段 JS 里不许出现一个反斜杠**。
+要传参数就用 data 属性 + 一个处理函数（memEdit(this) / memToggle(this)），
+不嵌引号、不玩转义 —— 那条错路从根上没有了。
 """
 import os
 import py_compile
@@ -68,16 +69,16 @@ function goMemory(){
   $("memBody").innerHTML = '<div class="empty">捞记忆…</div>';
   get("/api/memory?scope=me&limit=500").then(function(d){
     var rows = (d && d.memory) || [];
-    var h = '<button class="madd" onclick="openMem(0,\'me\')">＋ 添加记忆</button>';
+    var h = '<button class="madd" onclick="memNew()">＋ 添加记忆</button>';
     h += '<div class="mpeek2">这里只放我自己的。关于你的事在「潮汐捕梦」那一栏 —— ' +
          '那边是我的分支记忆，不往这儿堆。</div>';
     [["anchor", "锚 · 永远在"], ["flow", "流 · 最近的事"],
      ["sink", "沉 · 想起来才看"]].forEach(function(g){
       var list = rows.filter(function(m){ return m.layer === g[0]; });
       var open = !!memOpen[g[0]];
-      h += '<div class="mgroup"><button class="mhead" onclick="memToggle(\'' + g[0] + '\')">' +
-           '<b>' + g[1] + '</b><span>' + list.length + ' 条</span>' +
-           '<i>' + (open ? "▴" : "▾") + '</i></button>';
+      h += '<div class="mgroup"><button class="mhead" data-k="' + g[0] +
+           '" onclick="memToggle(this)"><b>' + g[1] + '</b><span>' + list.length +
+           ' 条</span><i>' + (open ? "▴" : "▾") + '</i></button>';
       if (open){
         h += list.length
           ? list.map(function(m){ return memRow(m, "me"); }).join("")
@@ -92,18 +93,29 @@ function goMemory(){
   });
 }
 
-function memToggle(k){ memOpen[k] = !memOpen[k]; goMemory(); }
+function memNew(){ openMem(0, "me"); }
+function memNewHer(el){ openMem(0, "her", el.getAttribute("data-owner")); }
+function memEdit(el){
+  openMem(parseInt(el.getAttribute("data-mem"), 10), el.getAttribute("data-scope"));
+}
+function memToggle(el){
+  var k = el.getAttribute("data-k");
+  memOpen[k] = !memOpen[k];
+  goMemory();
+}
 
 function memRow(m, scope){
   var body = m.body || "";
   var cut = body.length > 70 ? body.slice(0, 70) + "…" : body;
   return '<div class="mrow">' +
-    '<div class="mtxt" onclick="openMem(' + m.id + ',\'' + scope + '\')">' +
+    '<div class="mtxt" data-mem="' + m.id + '" data-scope="' + scope +
+    '" onclick="memEdit(this)">' +
     (m.title ? "<b>" + esc(m.title) + "</b>" : "") +
     '<span>' + esc(cut) + '</span>' +
     (m.keys ? '<i>触发：' + esc(m.keys) + '</i>' : "") +
     '</div>' +
-    '<button class="mk" onclick="openMem(' + m.id + ',\'' + scope + '\')">✎</button></div>';
+    '<button class="mk" data-mem="' + m.id + '" data-scope="' + scope +
+    '" onclick="memEdit(this)">✎</button></div>';
 }
 
 function goTide(){
@@ -124,8 +136,8 @@ function goTide(){
 
 function tideSec(title, hint, list, owner){
   var h = '<div class="mgroup"><div class="mhead2"><b>' + title + '</b><span>' + list.length +
-          ' 条</span><button class="mk" onclick="openMem(0,\'her\',\'' + owner +
-          '\')">＋</button></div><div class="mpeek2">' + hint + '</div>';
+          ' 条</span><button class="mk" data-owner="' + owner +
+          '" onclick="memNewHer(this)">＋</button></div><div class="mpeek2">' + hint + '</div>';
   h += list.length ? list.map(function(m){ return tideRow(m); }).join("")
                    : '<div class="empty" style="padding:6px 0 12px;font-size:11px">还空着。</div>';
   return h + '</div>';
@@ -135,17 +147,20 @@ function tideRow(m){
   var body = m.body || "";
   var cut = body.length > 90 ? body.slice(0, 90) + "…" : body;
   return '<div class="mrow">' +
-    '<div class="mtxt" onclick="openMem(' + m.id + ',\'her\')">' +
+    '<div class="mtxt" data-mem="' + m.id + '" data-scope="her" onclick="memEdit(this)">' +
     (m.title ? "<b>" + esc(m.title) + "</b>" : "") +
     '<span>' + esc(cut) + '</span>' +
     (m.keys ? '<i>说出来才想起来：' + esc(m.keys) + '</i>' : "") +
     '</div>' +
-    '<button class="msw sw' + (m.always ? " on" : "") + '" onclick="tideAlways(' +
-    m.id + ',' + (m.always ? 0 : 1) + ',this)"></button>' +
-    '<button class="mk" onclick="openMem(' + m.id + ',\'her\')">✎</button></div>';
+    '<button class="msw sw' + (m.always ? " on" : "") + '" data-mem="' + m.id +
+    '" data-on="' + (m.always ? 0 : 1) + '" onclick="tideAlways(this)"></button>' +
+    '<button class="mk" data-mem="' + m.id +
+    '" data-scope="her" onclick="memEdit(this)">✎</button></div>';
 }
 
-function tideAlways(id, on, el){
+function tideAlways(el){
+  var id = parseInt(el.getAttribute("data-mem"), 10);
+  var on = parseInt(el.getAttribute("data-on"), 10);
   el.className = "msw sw" + (on ? " on" : "");
   post("/api/memory/always", {id: id, always: on}).then(function(r){
     if (!r.ok){ toast(r.error || "没改上"); return; }
@@ -372,11 +387,17 @@ def main():
 
     html = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
     for must in ("function goTide()", "function tideAlways(", "function memRow(",
-                 'id="tideBody"', "if (p === \"tide\") goTide();"):
+                 "function memEdit(", 'id="tideBody"', "if (p === \"tide\") goTide();"):
         if must not in html:
             fail("这处没进去：" + must)
     if html.count("function goMemory()") != 1:
         fail("goMemory 出现了 %d 次（应该只有一次）" % html.count("function goMemory()"))
+    # 这条是这一发的命根子：新加的那段 JS 里不许有一个反斜杠
+    seg = html.split("/* ─────────── 记忆：星河", 1)
+    if len(seg) == 2:
+        new_js_part = seg[1].split("function openMem(id, scope, owner){", 1)[0]
+        if "\\" in new_js_part:
+            fail("新加的 JS 里出现了反斜杠 —— 这一版的规矩是不许有")
 
     js = html.split("<script>", 1)[1].split("</script>", 1)[0]
     import subprocess
