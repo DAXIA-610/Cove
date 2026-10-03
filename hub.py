@@ -155,6 +155,10 @@ def init_db():
             c.execute("ALTER TABLE chat ADD COLUMN image TEXT NOT NULL DEFAULT ''")
         if not has_col(c, "chat", "file"):
             c.execute("ALTER TABLE chat ADD COLUMN file TEXT NOT NULL DEFAULT ''")
+        # 这条消息发出去时，「此时此刻」那一段（今天的样子 + 命中的记忆）。
+        # 存它是为了往后每一轮能**原样重放** —— 见 build_messages 上面的说明。
+        if not has_col(c, "chat", "ctx"):
+            c.execute("ALTER TABLE chat ADD COLUMN ctx TEXT NOT NULL DEFAULT ''")
 
 
 # ----------------------------------------------------------------------
@@ -854,26 +858,19 @@ def _read_attach(rel):
         return ""
 
 
-def build_messages(user_text="", drop_id=0):
-    """组装这一轮送出去的东西。
+def env_text(user_text=""):
+    """「此时此刻」那一段：今天的样子 + 命中触发词的流和沉。
 
-    排队：临时说明 → 今天的样子 → 锚 → 流 → 沉 → 旧对话的摘要 → 最近的原话。
-    每一段都有自己的预算，装不下的从尾巴砍 —— 跟 SillyTavern 塞世界书一个道理。
-
-    drop_id：重新生成的时候，把那条从上下文里摘掉（别让它自己抄自己）。
+    ⚠️ 这段每轮都不一样，所以它**只能待在最后面**（紧挨着她刚说的那句）。
+    DeepSeek 的硬盘缓存按「从第 0 个 token 起的完整前缀」匹配（64 token 一块），
+    谁把会变的东西放前面，谁的缓存就一直是零。压在末尾，前面的
+    （人格 + 锚 + 摘要 + 历史）就一直是热的 —— 这是把命中率拉上去的唯一关键。
     """
     with db() as c:
-        rows = rows2list(c.execute(
-            "SELECT id, who, text, image, file FROM chat WHERE revoked=0 "
-            "ORDER BY id DESC LIMIT ?",
-            (CTX_KEEP_RECENT,)).fetchall())
-        rows = list(reversed(rows))
         d = c.execute("SELECT * FROM days WHERE day=?", (today_str(),)).fetchone()
-        summ = load_summary(c)
-
-    if drop_id:
-        rows = [r for r in rows if r["id"] != drop_id]
-
+        rows = rows2list(c.execute(
+            "SELECT text FROM chat WHERE revoked=0 ORDER BY id DESC LIMIT ?",
+            (CTX_SCAN_DEPTH,)).fetchall())
     bits = ["今天是 %s，我们在一起第 %d 天。" % (today_str(), days_together())]
     if d and (d["yoru_mood"] or d["yume_mood"]):
         bits.append("心情：Yoru %s；Yume %s。" % (d["yoru_mood"] or "—", d["yume_mood"] or "—"))
@@ -881,17 +878,45 @@ def build_messages(user_text="", drop_id=0):
     if todos:
         bits.append("待办：" + "、".join(todos) + "。")
 
-    # 拿最近的几条消息去扫触发词（SillyTavern 的扫描深度）
-    scan = " ".join([m["text"] for m in rows[-CTX_SCAN_DEPTH:]]) or user_text
-    anc, flow, sink = pick_memories(user_text or scan, scan)
-
-    sys_text = PLACEHOLDER_SOUL + "\n" + " ".join(bits)
-    for label, chunk in (("锚 · 改不了的那些", anc),
-                         ("流 · 最近这些天", flow),
-                         ("沉 · 想起来了", sink)):
+    scan = " ".join([m["text"] or "" for m in reversed(rows)]) or user_text
+    _anc, flow, sink = pick_memories(user_text or scan, scan)
+    out = " ".join(bits)
+    for label, chunk in (("流 · 最近这些天", flow), ("沉 · 想起来了", sink)):
         if chunk:
-            sys_text += "\n\n【" + label + "】\n" + chunk
+            out += "\n\n【" + label + "】\n" + chunk
+    return out
 
+
+def build_messages(user_text="", drop_id=0):
+    """组装这一轮送出去的东西。
+
+    **排队顺序就是命根子**，不许乱动：
+      ① 稳的放最前：人格 + 锚 + 旧对话摘要
+      ② 中间只追加：历史原话 —— 每条用户消息带着当时存下的 ctx，原样重放，一个字不差
+      ③ 变的压最后：今天的样子 + 命中的流/沉（就是 env_text 那一段）
+
+    为什么：DeepSeek 的缓存只认完整前缀。①② 一轮一轮字节一样，缓存就一直热着；
+    ③ 每轮都变，所以必须压在最后，不许插到中间去。
+
+    drop_id：重新生成的时候，把那条从上下文里摘掉（别让它自己抄自己）。
+    """
+    with db() as c:
+        rows = rows2list(c.execute(
+            "SELECT id, who, text, image, file, ctx FROM chat WHERE revoked=0 "
+            "ORDER BY id DESC LIMIT ?",
+            (CTX_KEEP_RECENT,)).fetchall())
+        rows = list(reversed(rows))
+        summ = load_summary(c)
+
+    if drop_id:
+        rows = [r for r in rows if r["id"] != drop_id]
+
+    # 锚：长期不变的那几条，属于「稳的前缀」
+    anc = pick_memories("", " ".join([m["text"] or "" for m in rows[-CTX_SCAN_DEPTH:]]))[0]
+
+    sys_text = PLACEHOLDER_SOUL
+    if anc:
+        sys_text += "\n\n【锚 · 改不了的那些】\n" + anc
     if summ and summ["text"]:
         sys_text += "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"]
 
@@ -906,10 +931,15 @@ def build_messages(user_text="", drop_id=0):
     for r in rows:
         text = r["text"] or ""
         role = "user" if r["who"] == "yume" else "assistant"
+        # 当时发出去的那份「此时此刻」，原样重放 —— 不许现算
+        note = (r["ctx"] if "ctx" in r.keys() else "") or ""
+        note = note.strip()
 
         if r.get("image") and r["id"] in img_ids:
             data = _img_data_url(r["image"])
             if data:
+                if note:
+                    msgs.append({"role": "system", "content": note})
                 one = {
                     "role": role,
                     "content": [
@@ -927,6 +957,8 @@ def build_messages(user_text="", drop_id=0):
             body_txt = _read_attach(r["file"])
             if body_txt:
                 text = "【附件】" + NL + body_txt + NL + "【附件完】" + NL + text
+        if note:
+            msgs.append({"role": "system", "content": note})
         if role == "assistant":
             # 老轮次没存思考原文，但字段得占着 —— 对面认字段不认内容
             msgs.append({"role": role, "content": text, "reasoning_content": ""})
@@ -1265,8 +1297,11 @@ def api_chat_send(body):
         text = text[:2000]
 
     with db() as c:
-        c.execute("INSERT INTO chat(who, text, created, image, file) VALUES(?,?,?,?,?)",
-                  ("yume", text, now_str(), image, attach))
+        cur = c.execute(
+            "INSERT INTO chat(who, text, created, image, file, ctx) VALUES(?,?,?,?,?,'')",
+            ("yume", text, now_str(), image, attach))
+        # 这一段得随消息一起落库 —— 下一轮要原样重放它，不然前缀一变缓存全废
+        c.execute("UPDATE chat SET ctx=? WHERE id=?", (env_text(text), cur.lastrowid))
 
     r = _generate(text)
     if r.get("reply"):

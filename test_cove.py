@@ -377,6 +377,28 @@ except Exception:
 _asst = [x for x in _pairs if x[0] == "assistant"]
 chk("历史里我的每一条都带 reasoning_content",
     bool(_asst) and all(x[1] for x in _asst), _pairs)
+# 缓存那条不变量：会变的东西（今天是…）不许出现在开头，必须在最末尾
+_code2 = ("import json, hub; ms = hub.build_messages(%s); "
+          "print(json.dumps([(m[\"role\"], \"今天是\" in json.dumps(m, ensure_ascii=False)) for m in ms]))"
+          % json.dumps("体检"))
+_r2 = subprocess.run([sys.executable, "-c", _code2], cwd=tmp, capture_output=True, text=True)
+try:
+    _p2 = json.loads(_r2.stdout.strip().splitlines()[-1])
+except Exception:
+    _p2 = []
+chk("第一条是 system 且不含「今天是」（前缀必须稳）",
+    bool(_p2) and _p2[0][0] == "system" and not _p2[0][1], _p2[:3])
+_pos = [i for i, x in enumerate(_p2) if x[1]]
+chk("「今天是」只出现在她的话前面那一条（system）里",
+    bool(_pos) and all(_p2[i][0] == "system" and i + 1 < len(_p2) and _p2[i + 1][0] == "user"
+                       for i in _pos), _p2)
+chk("她的话和我回的话里都不许夹「今天是」",
+    all(not x[1] for x in _p2 if x[0] != "system"), _p2)
+# 每条她的话旁边都跟着那份存下来的 ctx（原样重放用）
+_c = _sq.connect(os.path.join(tmp, "cove.db"))
+_ck = _c.execute("SELECT COUNT(*) FROM chat WHERE who='yume' AND ctx<>''").fetchone()[0]
+_c.close()
+chk("她说过的话里，有带 ctx 的", _ck > 0, _ck)
 _usr = [x for x in _pairs if x[0] == "user"]
 chk("user 那条没被塞多余字段", bool(_usr) and not any(x[1] for x in _usr), _pairs)
 
