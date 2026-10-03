@@ -829,6 +829,7 @@
 
 <script>
 var S = {};
+var PAGE_VER = "2026-10-04i";     // 这一份页面自己的版本（服务端版本不一样就自己刷）
 var THEMES = {
   sea:  {n:"海天", ink:"#0d3247", soft:"rgba(13,50,71,.55)", card:"rgba(255,255,255,.34)", card2:"rgba(255,255,255,.54)", line:"rgba(255,255,255,.66)", edge:"rgba(13,50,71,.22)", accent:"#2f7fa0",
          bg:"linear-gradient(180deg,#e9f7fd,#c3e7f6 22%,#8fcee3 52%,#4f96b6 80%,#2a6076)"},
@@ -1002,6 +1003,22 @@ function loadToday(){
   return get("/api/today").then(function(d){
     if (!d.ok) return;
     Object.keys(d).forEach(function(k){ S[k] = d[k]; });
+    // 这一手是给"数据新的、界面旧的"准备的：
+    // 页面里写着自己的版本，跟服务端一比就知道手里这份是不是旧的 —— 是就自己刷一次。
+    if (S.version && S.version !== PAGE_VER){
+      try {
+        if (!sessionStorage.getItem("cove_reloaded")){
+          sessionStorage.setItem("cove_reloaded", "1");
+          toast("页面是旧的，我刷一下…");
+          setTimeout(function(){ location.reload(); }, 900);
+        } else {
+          toast("页面还是旧的（页面 " + PAGE_VER + "，服务器 " + S.version + "）—— 手动刷新一下");
+        }
+      } catch (e) {
+        toast("页面是旧的，手动刷新一下");
+      }
+      return;
+    }
     paint(); renderAvatars();
     $("nmYoru").textContent = nameOf("yoru");
     $("nmYume").textContent = nameOf("yume");
