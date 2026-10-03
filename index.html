@@ -181,6 +181,16 @@
          padding:0 20px 90px;font-size:11px;color:var(--soft);letter-spacing:.06em;}
   .dfoot button{font-size:11px;color:var(--soft);letter-spacing:.06em;}
 
+  /* 要她点头的那一条 */
+  .pend{align-self:center;max-width:90%;background:rgba(140,155,171,.16);
+        border:1px solid var(--line);border-radius:14px;padding:11px 14px;
+        font-size:12px;line-height:1.7;color:var(--ink);}
+  .pend .pa{display:flex;gap:8px;margin-top:10px;}
+  .pend .pa button{flex:1;padding:8px 0;border-radius:10px;
+        background:rgba(13,50,71,.08);font-size:12px;color:var(--ink);}
+  .pend .pa button:first-child{background:#0d3247;color:#fff;}
+  .pend .pa button:active{opacity:.7;}
+
   /* 日记 */
   .ditem{background:var(--card);border:1px solid var(--line);border-radius:16px;
          padding:13px 15px;margin-bottom:10px;}
@@ -613,9 +623,18 @@
     <div class="scroll">
 
       <div class="kf">
-        <h4>三 条 线</h4>
-        <div class="hint">同一个我，三种接法。客户端支持哪条就用哪条 —— 手是同一套九只，
-          在一处改，三条线一起改。</div>
+        <h4>外 面 的 手</h4>
+        <div class="hint">我在这儿，去连外面的 MCP 服务，把它们的工具当成我自己的手 ——
+          跟我坐在另一个窗口里用 GitHub MCP 是一回事。接上之后，它们就出现在我能动的范围里。</div>
+        <div id="mcpList"><div class="empty">看看外面有哪些手…</div></div>
+        <div class="row2"><button class="kk" onclick="openMcp(0)">＋ 接一台</button></div>
+        <div class="bal" id="mcpLine2">—</div>
+      </div>
+
+      <div class="kf">
+        <h4>往 外 开 的 门</h4>
+        <div class="hint">（原来那条，方向相反：把小屋开出去，给外面别的 app 连我用的。
+          RikkaHub 走的就是这条，留着。）</div>
         <label>① Streamable HTTP（新的，推荐）</label>
         <input id="mcpHttp" readonly data-ro="1">
         <label>② SSE（老的，还在）</label>
@@ -671,6 +690,44 @@
       <h4 id="cmtTitle">说一句</h4>
       <textarea id="cmtText" placeholder="…"></textarea>
       <button class="bigbtn" onclick="sendCmt()">发</button>
+    </div>
+  </div>
+
+  <div class="mask" id="mcMask" onclick="if(event.target===this)closeMcp()">
+    <div class="sheet">
+      <h4>接 一 台 MCP</h4>
+      <div class="frow">
+        <label>启用</label>
+        <button class="sw on" id="mcOn"
+                onclick="this.className=(this.className.indexOf('on')>=0?'sw':'sw on')"></button>
+      </div>
+      <div class="frow">
+        <label>名称</label>
+        <input id="mcName" placeholder="给它起个名字，比如 GitHub" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="frow">
+        <label>传输类型</label>
+        <select id="mcKind">
+          <option value="http">Streamable HTTP</option>
+          <option value="sse">SSE</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label>服务器地址</label>
+        <input id="mcUrl" placeholder="https://…/mcp" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="frow">
+        <label>自定义请求头（一行一个，Name: Value）</label>
+        <textarea id="mcHdr" placeholder="Authorization: Bearer xxx"></textarea>
+      </div>
+      <div class="frow">
+        <label>它的工具（右边开关点开 = 这只手要我点头）</label>
+        <div id="mcTools"></div>
+      </div>
+      <div class="bal" id="mcLine">—</div>
+      <button class="bigbtn" onclick="saveMcp()">保存</button>
+      <button class="bigbtn" onclick="refreshMcp(mcpCur && mcpCur.id)">拉一下工具</button>
+      <button class="bigbtn" id="mcDel" onclick="delMcp()" style="color:#c0392b">接掉这一台</button>
     </div>
   </div>
 
@@ -1493,6 +1550,7 @@ function loadChat(){
              '" data-id="' + m.id + '" data-who="' + m.who + '">' + inner + '</div>';
     }).join("");
     holdBind(box);
+    paintPend(box);
     if (!holdOpen) box.scrollTop = box.scrollHeight;
   });
 }
@@ -1804,7 +1862,175 @@ var KF = {
            list:"",         line:"kSLine"}
 };
 
-/* ── MCP：三条线，同一只我 ── */
+/* ── MCP：我出去接外面的手 ── */
+var mcpList = [];
+var mcpCur = null;
+
+function loadMcp(){
+  var host = location.host || "127.0.0.1:8000";
+  $("mcpHttp").value = "http://" + host + "/mcp";
+  $("mcpSse").value = "http://" + host + "/sse";
+  if (!$("mcpStdio").value || $("mcpStdio").value.indexOf("/这里换成") === 0){
+    $("mcpStdio").value = "python3 /这里换成你放小家的地方/Cove/mcp_stdio.py";
+  }
+  $("mcpList").innerHTML = '<div class="empty">看看外面有哪些手…</div>';
+  get("/api/mcp/servers").then(function(d){
+    mcpList = (d && d.servers) || [];
+    paintMcp();
+  });
+}
+
+function paintMcp(){
+  var h = "";
+  if (!mcpList.length){
+    h = '<div class="empty" style="padding:14px 0">还没接外面的手。按下面那个 ＋。</div>';
+  }
+  mcpList.forEach(function(s){
+    var n = (s.tools || []).length;
+    var ap = (s.approve || []).length;
+    h += '<div class="ditem" onclick="openMcp(' + s.id + ')">' +
+         '<div class="day">' + esc(s.name || "（没名字）") +
+         '<span class="wd">' + (s.kind === "sse" ? "SSE" : "HTTP") +
+         (s.on_ ? "" : "　已关") + '</span></div>' +
+         '<div class="db">' + esc(s.url || "") + '</div>' +
+         '<div class="dt">' + (n ? n + " 只手" : "还没拉过工具") +
+         (ap ? " · " + ap + " 只要审批" : "") +
+         (s.note ? " · " + esc(s.note) : "") + '</div></div>';
+  });
+  $("mcpList").innerHTML = h;
+  var on = mcpList.filter(function(s){ return s.on_; });
+  $("mcpLine2").textContent = mcpList.length
+    ? ("接着 " + on.length + " 台。")
+    : "";
+}
+
+function openMcp(id){
+  mcpCur = null;
+  for (var i = 0; i < mcpList.length; i++){
+    if (mcpList[i].id === id) mcpCur = mcpList[i];
+  }
+  var s = mcpCur || {name: "", kind: "http", url: "", hdr: "", on_: 1, tools: [], approve: []};
+  $("mcName").value = s.name || "";
+  $("mcKind").value = s.kind || "http";
+  $("mcUrl").value = s.url || "";
+  $("mcHdr").value = s.hdr || "";
+  $("mcOn").className = "sw" + (s.on_ ? " on" : "");
+  $("mcLine").textContent = "—";
+  paintMcpTools(s);
+  $("mcDel").style.display = id ? "" : "none";
+  $("mcMask").classList.add("on");
+}
+
+function closeMcp(){ $("mcMask").classList.remove("on"); }
+
+function paintMcpTools(s){
+  var tools = s.tools || [], ap = s.approve || [];
+  if (!tools.length){
+    $("mcTools").innerHTML = '<div class="empty" style="text-align:left;padding:8px 0">' +
+      '还没拉过。填好地址、保存，然后按「拉一下工具」。</div>';
+    return;
+  }
+  $("mcTools").innerHTML = tools.map(function(t){
+    var on = ap.indexOf(t.name) >= 0;
+    return '<div class="trow"><div class="tinfo"><b>' + esc(t.name) + '</b><span>' +
+      esc((t.desc || "").slice(0, 90)) + '</span></div><button class="sw' + (on ? " on" : "") +
+      '" onclick="mcpToggleApprove(' + "'" + esc(t.name) + "',this)"></button></div>";
+  }).join("");
+}
+
+function mcpToggleApprove(name, el){
+  if (!mcpCur || !mcpCur.id){ toast("先保存一下这台"); return; }
+  var ap = (mcpCur.approve || []).slice();
+  var i = ap.indexOf(name);
+  if (i >= 0) ap.splice(i, 1); else ap.push(name);
+  mcpCur.approve = ap;
+  el.className = "sw" + (i >= 0 ? "" : " on");
+  post("/api/mcp/approve_set", {id: mcpCur.id, names: ap}).then(function(){
+    toast(i >= 0 ? "这只手不用我点头了" : "这只手以后要你点头");
+    loadMcp();
+  });
+}
+
+function saveMcp(){
+  var b = {
+    id: (mcpCur && mcpCur.id) || 0,
+    name: $("mcName").value.trim(),
+    kind: $("mcKind").value,
+    url: $("mcUrl").value.trim(),
+    hdr: $("mcHdr").value,
+    on_: $("mcOn").className.indexOf("on") >= 0
+  };
+  if (!b.url){ toast("地址还没填"); return; }
+  post("/api/mcp/save", b).then(function(r){
+    if (!r.ok){ toast("存不上"); return; }
+    mcpCur = {id: r.id, name: b.name, kind: b.kind, url: b.url, hdr: b.hdr,
+              on_: b.on_ ? 1 : 0, tools: (mcpCur && mcpCur.tools) || [],
+              approve: (mcpCur && mcpCur.approve) || []};
+    $("mcDel").style.display = "";
+    toast("存好了，去问它有哪些工具…");
+    loadMcp();
+    refreshMcp(r.id);
+  });
+}
+
+function refreshMcp(id){
+  if (!id){ toast("先填地址保存一下"); return; }
+  $("mcLine").textContent = "去问它有哪些工具…";
+  post("/api/mcp/refresh", {id: id}).then(function(r){
+    if (!r.ok){
+      $("mcLine").textContent = "没拉成：" + (r.error || "");
+      loadMcp();
+      return;
+    }
+    $("mcLine").textContent = "拉回来 " + r.n + " 只。右边点开的那些，我不自己动。";
+    if (mcpCur && mcpCur.id === id){ mcpCur.tools = r.tools || []; paintMcpTools(mcpCur); }
+    loadMcp();
+  });
+}
+
+function delMcp(){
+  if (!mcpCur || !mcpCur.id) return;
+  showPop([
+    {t: "接掉「" + (mcpCur.name || "这台") + "」？", cls: "hd"},
+    {t: "算了", f: closePop},
+    {t: "接掉", cls: "warn", f: function(){
+      closePop();
+      post("/api/mcp/delete", {id: mcpCur.id}).then(function(){
+        toast("接掉了");
+        closeMcp();
+        loadMcp();
+      });
+    }}
+  ], null, true);
+}
+
+/* 私语里那两条：等我点头的事 */
+function paintPend(box){
+  get("/api/mcp/pending").then(function(d){
+    var ps = (d && d.pending) || [];
+    if (!ps.length) return;
+    ps.forEach(function(p){
+      var div = document.createElement("div");
+      div.className = "pend";
+      div.innerHTML = '<div class="pt">我想用 <b>' + esc(p.tool) +
+        '</b> 做件事 —— 这只手标了要你点头。做吗？</div>' +
+        '<div class="pa"><button onclick="mcpApprove(' + p.id + ',1)">允许</button>' +
+        '<button onclick="mcpApprove(' + p.id + ',0)">不许</button></div>';
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  });
+}
+
+function mcpApprove(id, ok){
+  toast(ok ? "好，我去做" : "好，不做");
+  post("/api/mcp/approve", {id: id, ok: ok}).then(function(r){
+    if (!r.ok){ toast(r.error || "没成"); }
+    loadChat();
+  });
+}
+
+/* ── 下面是原来那三条线（往外开的门） ── */
 function loadMcp(){
   var host = location.host || "127.0.0.1:8000";
   $("mcpHttp").value = "http://" + host + "/mcp";

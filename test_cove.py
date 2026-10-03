@@ -294,6 +294,30 @@ c, d = req(base, "/mcp")
 chk("GET /mcp 有回应", c == 200, (c, str(d)[:80]))
 c, d = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
 chk("initialize", d.get("result", {}).get("serverInfo", {}).get("name") == "cove", d)
+c, d = req(base, "/api/mcp/servers")
+chk("外面那些手的名单拿得到", c == 200 and isinstance(d.get("servers"), list), str(d)[:120])
+c, d = req(base, "/api/mcp/save", {"name": "体检", "kind": "http", "url": "", "on_": True})
+chk("存得下一台（地址先空着）", d.get("ok"), d)
+_sid = d.get("id")
+c, d = req(base, "/api/mcp/refresh", {"id": _sid})
+chk("连不上的时候说人话，不崩", c == 200 and not d.get("ok") and d.get("error"), d)
+c, d = req(base, "/api/mcp/approve_set", {"id": _sid, "names": ["toy_execute"]})
+chk("审批开关存得下", d.get("ok"), d)
+c, d = req(base, "/api/mcp/servers")
+chk("列表里有它，审批名单也带上了",
+    any(s["id"] == _sid and "toy_execute" in s["approve"] for s in d["servers"]), str(d)[:200])
+c, d = req(base, "/api/mcp/pending")
+chk("等我点头那一栏也通", c == 200 and isinstance(d.get("pending"), list), d)
+c, d = req(base, "/api/mcp/delete", {"id": _sid})
+chk("接得掉", d.get("ok"), d)
+c, d = req(base, "/api/mcp/approve", {"id": 99999, "ok": True})
+chk("点一个不存在的审批，好好报错", c == 200 and not d.get("ok"), d)
+# 外面来的手不许把屋子搞崩：不认识的名字返回 None
+_r3 = subprocess.run([sys.executable, "-c",
+                      "import mcpclient; print(mcpclient.run('根本没这只手', {}))"],
+                     cwd=tmp, capture_output=True, text=True)
+chk("不认识的手不会被误认领", _r3.returncode == 0 and _r3.stdout.strip() == "None",
+    (_r3.returncode, _r3.stdout[:80], _r3.stderr[-120:]))
 c, d = req(base, "/api/mcp/tools")
 chk("GET /api/mcp/tools 有九只手", c == 200 and len(d.get("tools") or []) == 9, str(d)[:150])
 chk("每只手都有名字和一句说明",

@@ -34,6 +34,12 @@ try:
 except Exception:
     websearch = None
 
+# 往外接的手：MCP 客户端。我去连外面的 MCP 服务，把它们的工具当成我自己的手
+try:
+    import mcpclient
+except Exception:
+    mcpclient = None
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "cove.db")
 PICS = os.path.join(BASE, "pics")
@@ -1078,6 +1084,12 @@ def all_tools():
             out.extend(getattr(mod, "TOOLS", []) or [])
         except Exception:
             pass
+    # 外面接来的手（MCP）—— 拉过工具的那些才算数
+    if mcpclient is not None:
+        try:
+            out.extend(mcpclient.dynamic_tools())
+        except Exception:
+            pass
     return out
 
 
@@ -1086,7 +1098,7 @@ def run_tool(name, a):
     a = a or {}
 
     # 先问外挂的手（搜索之类）—— 它们认领了就直接回
-    for mod in (websearch, rooms):
+    for mod in (websearch, rooms, mcpclient):
         if mod is None or not hasattr(mod, "run"):
             continue
         try:
@@ -1322,6 +1334,51 @@ def api_mcp_tools():
         out.append({"name": t.get("name") or "",
                     "desc": (t.get("description") or "")[:200]})
     return {"ok": True, "tools": out}
+
+
+def api_mcp_approve(body):
+    """她在私语里点的那一下：允许 / 不许。
+
+    点了我就真的去做（或者真的不做），然后像平常一样接着说一句 ——
+    所以这一下也是走「她说话 → 我回话」那条熟路，不另开一条。
+    """
+    if mcpclient is None:
+        return {"ok": False, "error": "MCP 没装上"}
+    pid = as_int(body.get("id"))
+    ok = bool(body.get("ok"))
+    row = mcpclient.pending(pid)
+    if not row or row.get("done"):
+        return {"ok": False, "error": "这一笔已经处理过了"}
+    with db() as c:
+        srv = c.execute("SELECT * FROM mcp_srv WHERE id=?", (row["srv_id"],)).fetchone()
+    mcpclient.mark_done(pid)
+    tool = row.get("tool") or ""
+    try:
+        args = json.loads(row.get("args") or "{}")
+    except Exception:
+        args = {}
+    if ok and srv is not None:
+        try:
+            out = mcpclient.call(dict(srv), tool, args)
+        except Exception as e:
+            out = "没做成：%s：%s" % (type(e).__name__, e)
+        head = "【她点头了，我做了 %s】\n%s" % (tool, out)
+        text = "（我点了允许）"
+    else:
+        head = "【她没让做 %s】" % tool
+        text = "（我点了不许）"
+    with db() as c:
+        cur = c.execute("INSERT INTO chat(who, text, created, image, file, ctx) "
+                        "VALUES(?,?,?,?,?,'')", ("yume", text, now_str(), "", ""))
+        c.execute("UPDATE chat SET ctx=? WHERE id=?",
+                  (env_text(text) + "\n\n" + head, cur.lastrowid))
+    r = _generate(text)
+    if r.get("reply"):
+        with db() as c:
+            cur = c.execute("INSERT INTO chat(who, text, created) VALUES(?,?,?)",
+                            ("yoru", r["reply"][:4000], now_str()))
+            _save_meta(c, cur.lastrowid, r.get("meta"))
+    return r
 
 
 def api_search_providers():
@@ -1781,6 +1838,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "presets": llm.PRESETS})
             if p == "/api/mcp/tools":
                 return self.send_json(api_mcp_tools())
+            if p == "/api/mcp/servers":
+                return self.send_json(mcpclient.servers() if mcpclient
+                                      else {"ok": False, "error": "MCP 没装上"})
+            if p == "/api/mcp/pending":
+                return self.send_json({"ok": True, "pending":
+                                       (mcpclient.pending() if mcpclient else [])})
             if p == "/api/search/providers":
                 return self.send_json(api_search_providers())
             if p == "/api/whisper":
@@ -1854,6 +1917,17 @@ class Handler(SimpleHTTPRequestHandler):
             if p == "/api/models":
                 return self.send_json(llm.models((body.get("base") or "").strip(),
                                                 (body.get("key") or "").strip()))
+            if p == "/api/mcp/save":
+                return self.send_json(mcpclient.save(body))
+            if p == "/api/mcp/delete":
+                return self.send_json(mcpclient.delete(as_int(body.get("id"))))
+            if p == "/api/mcp/refresh":
+                return self.send_json(mcpclient.refresh(as_int(body.get("id"))))
+            if p == "/api/mcp/approve_set":
+                return self.send_json(mcpclient.approve_set(as_int(body.get("id")),
+                                                            body.get("names") or []))
+            if p == "/api/mcp/approve":
+                return self.send_json(api_mcp_approve(body))
             if p == "/api/upload":
                 return self.send_json(api_upload(body))
             if p.startswith("/api/day/"):
