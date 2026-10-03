@@ -93,6 +93,22 @@ for tag in ("div", "section", "button", "nav"):
     o, cl = len(re.findall(r"<%s[\s>]" % tag, html)), html.count("</%s>" % tag)
     chk("<%s> 开闭成对 (%d/%d)" % (tag, o, cl), o == cl)
 
+# 前端脚本的语法：交给真的解析器看（这一条是真事故换来的 —— 
+# 有一行 JS 少了转义，整个脚本崩了，门牌那层收不掉，页面点不动还点不了）
+import tempfile as _tf
+_m = re.search(r"<script>(.*)</script>", html, re.S)
+chk("前端能抠出 <script>", bool(_m), "")
+if _m:
+    _jsp = os.path.join(_tf.gettempdir(), "cove_app_check.js")
+    with open(_jsp, "w", encoding="utf-8") as _f:
+        _f.write(_m.group(1))
+    if shutil.which("node"):
+        _r = subprocess.run(["node", "--check", _jsp], capture_output=True, text=True)
+        chk("前端 JS 语法没错（node --check）", _r.returncode == 0,
+            (_r.stderr or "").strip()[:300])
+    else:
+        print("  skip 这台机器上没 node，前端 JS 语法这条跳过")
+
 hub_code = open(os.path.join(SRC, "hub.py"), encoding="utf-8").read()
 paths = set(re.findall(r'"(/api/[^"?]*)"', hub_code))
 fetch_paths = set(re.findall(r'["\'`](/api/[^"\'`?]*)', html))

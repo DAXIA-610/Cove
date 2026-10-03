@@ -1934,7 +1934,8 @@ function paintMcpTools(s){
     var on = ap.indexOf(t.name) >= 0;
     return '<div class="trow"><div class="tinfo"><b>' + esc(t.name) + '</b><span>' +
       esc((t.desc || "").slice(0, 90)) + '</span></div><button class="sw' + (on ? " on" : "") +
-      '" onclick="mcpToggleApprove(' + "'" + esc(t.name) + "',this)"></button></div>";
+      '" onclick="mcpToggleApprove(' + "'" + esc(t.name) + "',this)" +
+      '></button></div>';
   }).join("");
 }
 
