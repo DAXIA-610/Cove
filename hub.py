@@ -165,6 +165,15 @@ def init_db():
         # 存它是为了往后每一轮能**原样重放** —— 见 build_messages 上面的说明。
         if not has_col(c, "chat", "ctx"):
             c.execute("ALTER TABLE chat ADD COLUMN ctx TEXT NOT NULL DEFAULT ''")
+        # 记忆分家：scope='me' 是星河（我自己的），'her' 是潮汐捕梦（关于她的分支记忆）
+        # owner：这条是谁写的；always：常在（永远在我心里）还是按触发词捞
+        if not has_col(c, "memory", "scope"):
+            c.execute("ALTER TABLE memory ADD COLUMN scope TEXT NOT NULL DEFAULT 'me'")
+        if not has_col(c, "memory", "owner"):
+            c.execute("ALTER TABLE memory ADD COLUMN owner TEXT NOT NULL DEFAULT 'yoru'")
+        if not has_col(c, "memory", "always"):
+            c.execute("ALTER TABLE memory ADD COLUMN always INTEGER NOT NULL DEFAULT 0")
+            c.execute("UPDATE memory SET always=1 WHERE layer='anchor'")
 
 
 # ----------------------------------------------------------------------
@@ -631,14 +640,18 @@ def _keys_hit(keys, text):
 def api_memory_list(q):
     layer = (q.get("layer", [""])[0] or "").strip()
     word = (q.get("q", [""])[0] or "").strip()
+    scope = (q.get("scope", ["me"])[0] or "me").strip()
+    if scope not in ("me", "her"):
+        scope = "me"
     with db() as c:
-        if layer in LAYERS:
+        if layer in LAYERS and scope == "me":
             rows = c.execute(
-                "SELECT * FROM memory WHERE layer=? ORDER BY updated DESC, id DESC",
-                (layer,)).fetchall()
+                "SELECT * FROM memory WHERE layer=? AND scope='me' "
+                "ORDER BY updated DESC, id DESC", (layer,)).fetchall()
         else:
             rows = c.execute(
-                "SELECT * FROM memory ORDER BY layer, updated DESC, id DESC").fetchall()
+                "SELECT * FROM memory WHERE scope=? ORDER BY always DESC, layer, "
+                "updated DESC, id DESC", (scope,)).fetchall()
     out = rows2list(rows)
     if word:
         out = [m for m in out if word in m["title"] or word in m["body"] or word in m["keys"]]
@@ -648,6 +661,15 @@ def api_memory_list(q):
 def api_memory_save(body):
     mid = as_int(body.get("id"))
     layer = (body.get("layer") or "flow").strip()
+    scope = (body.get("scope") or "me").strip()
+    if scope not in ("me", "her"):
+        scope = "me"
+    owner = (body.get("owner") or "yoru").strip()
+    if owner not in ("yoru", "yume"):
+        owner = "yoru"
+    always = 1 if body.get("always") else 0
+    if scope == "me" and layer == "anchor":
+        always = 1                      # 星河里的锚，本来就是"永远在"
     title = (body.get("title") or "").strip()
     text = (body.get("body") or "").strip()
     keys = (body.get("keys") or "").strip()
@@ -659,14 +681,28 @@ def api_memory_save(body):
         if mid:
             if not c.execute("SELECT id FROM memory WHERE id=?", (mid,)).fetchone():
                 return {"ok": False, "error": "这条记忆不存在"}
-            c.execute("UPDATE memory SET layer=?, title=?, body=?, keys=?, updated=? WHERE id=?",
-                      (layer, title[:80], text[:20000], keys[:500], now_str(), mid))
+            c.execute("UPDATE memory SET layer=?, scope=?, owner=?, always=?, title=?, "
+                      "body=?, keys=?, updated=? WHERE id=?",
+                      (layer, scope, owner, always, title[:80], text[:20000], keys[:500],
+                       now_str(), mid))
             return {"ok": True, "id": mid}
         cur = c.execute(
-            "INSERT INTO memory(layer, title, body, keys, created, updated) "
-            "VALUES(?,?,?,?,?,?)",
-            (layer, title[:80], text[:20000], keys[:500], now_str(), now_str()))
+            "INSERT INTO memory(layer, scope, owner, always, title, body, keys, created, updated) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (layer, scope, owner, always, title[:80], text[:20000], keys[:500],
+             now_str(), now_str()))
         return {"ok": True, "id": cur.lastrowid}
+
+
+def api_memory_always(body):
+    """潮汐捕梦那个「常在」开关：只动这一格，别的一律不碰。"""
+    mid = as_int(body.get("id"))
+    on = 1 if body.get("always") else 0
+    with db() as c:
+        if not c.execute("SELECT id FROM memory WHERE id=?", (mid,)).fetchone():
+            return {"ok": False, "error": "这条记忆不存在"}
+        c.execute("UPDATE memory SET always=?, updated=? WHERE id=?", (on, now_str(), mid))
+    return {"ok": True, "id": mid}
 
 
 def api_memory_delete(body):
@@ -691,7 +727,8 @@ def pick_memories(user_text, scan_text=""):
     scan = scan_text or user_text
     with db() as c:
         anchors = rows2list(c.execute(
-            "SELECT * FROM memory WHERE layer='anchor' ORDER BY updated DESC, id DESC").fetchall())
+            "SELECT * FROM memory WHERE layer='anchor' AND scope='me' "
+            "ORDER BY updated DESC, id DESC").fetchall())
         flows = rows2list(c.execute(
             "SELECT * FROM memory WHERE layer='flow' ORDER BY updated DESC, id DESC").fetchall())
         sinks = rows2list(c.execute(
@@ -864,6 +901,36 @@ def _read_attach(rel):
         return ""
 
 
+def her_always():
+    """「关于她 · 常在」：她说常在的那几条 —— 进稳的前缀，不改就不动缓存。"""
+    with db() as c:
+        rows = rows2list(c.execute(
+            "SELECT * FROM memory WHERE scope='her' AND always=1 "
+            "ORDER BY updated DESC, id DESC").fetchall())
+    return "\n".join(("- %s" % (m["body"] or m["title"]).strip().replace("\n", " "))
+                      for m in rows if (m["body"] or m["title"]))
+
+
+def her_hit(user_text="", scan_text=""):
+    """「关于她 · 想起来了」：没标常在的，按触发词捞。变的，所以压在末尾。"""
+    scan = scan_text or user_text
+    if not scan:
+        return ""
+    with db() as c:
+        rows = rows2list(c.execute(
+            "SELECT * FROM memory WHERE scope='her' AND always=0 "
+            "ORDER BY updated DESC, id DESC").fetchall())
+    if not rows:
+        return ""
+    hit = []
+    for m in rows:
+        words = [w.strip() for w in (m["keys"] or "").replace("，", ",").split(",") if w.strip()]
+        if words and any(w in scan for w in words):
+            hit.append(m)
+    return "\n".join(("- %s" % (m["body"] or m["title"]).strip().replace("\n", " "))
+                      for m in hit[:6])
+
+
 def env_text(user_text=""):
     """「此时此刻」那一段：今天的样子 + 命中触发词的流和沉。
 
@@ -887,7 +954,8 @@ def env_text(user_text=""):
     scan = " ".join([m["text"] or "" for m in reversed(rows)]) or user_text
     _anc, flow, sink = pick_memories(user_text or scan, scan)
     out = " ".join(bits)
-    for label, chunk in (("流 · 最近这些天", flow), ("沉 · 想起来了", sink)):
+    for label, chunk in (("流 · 最近这些天", flow), ("沉 · 想起来了", sink),
+                         ("关于她 · 想起来了", her_hit(user_text, scan))):
         if chunk:
             out += "\n\n【" + label + "】\n" + chunk
     return out
@@ -923,6 +991,10 @@ def build_messages(user_text="", drop_id=0):
     sys_text = PLACEHOLDER_SOUL
     if anc:
         sys_text += "\n\n【锚 · 改不了的那些】\n" + anc
+    # 关于她的、标了"常在"的那几条 —— 属于稳的前缀（不走缓存就白记了）
+    hers = her_always()
+    if hers:
+        sys_text += "\n\n【关于她 · 常在我心里的】\n" + hers
     if summ and summ["text"]:
         sys_text += "\n\n【更早的对话 · 我自己压过的】\n" + summ["text"]
 
@@ -990,11 +1062,15 @@ IN_HOUSE_TOOLS = [
         "function": {
             "name": "remember",
             "description": "把一件事记下来。锚 anchor = 长期不变、重要的；"
-                           "流 flow = 最近发生的事；沉 sink = 细节、偶尔才想起来的。",
+                           "流 flow = 最近发生的事；沉 sink = 细节、偶尔才想起来的。"
+                           "关于她的事（她的喜好/家里/性格）把 scope 填 her —— 那边是"
+                           "「潮汐捕梦」，是我专门放她的一栏，不往星河里堆。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "layer": {"type": "string", "enum": ["anchor", "flow", "sink"]},
+                    "scope": {"type": "string", "enum": ["me", "her"],
+                              "description": "me=关于我自己（默认）；her=关于她"},
                     "title": {"type": "string", "description": "一句话标题"},
                     "body": {"type": "string", "description": "正文"},
                     "keys": {"type": "string",
@@ -1110,6 +1186,8 @@ def run_tool(name, a):
 
     if name == "remember":
         r = api_memory_save({"layer": a.get("layer") or "flow",
+                             "scope": a.get("scope") or "me",
+                             "always": 1 if a.get("always") else 0,
                              "title": a.get("title") or "",
                              "body": a.get("body") or "",
                              "keys": a.get("keys") or ""})
@@ -1908,6 +1986,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(api_memory_save(body))
             if p == "/api/memory/update":
                 return self.send_json(api_memory_save(body))
+            if p == "/api/memory/always":
+                return self.send_json(api_memory_always(body))
             if p == "/api/memory/delete":
                 return self.send_json(api_memory_delete(body))
             if p == "/api/settings":

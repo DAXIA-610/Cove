@@ -198,6 +198,23 @@ c, d = req(base, "/api/memory", {"layer": "sink", "title": "体检沉", "body": 
 chk("存一条沉", d.get("ok"), d)
 c, d = req(base, "/api/memory", {"layer": "啥都不是", "title": "x", "body": "x"})
 chk("坏 layer 被挡", not d.get("ok"), d)
+c, d = req(base, "/api/memory", {"scope": "her", "owner": "yume", "always": 1,
+                                           "title": "她", "body": "体检·关于她的·常在"})
+chk("关于她的记忆存得进", d.get("ok"), d)
+c, d = req(base, "/api/memory?scope=her")
+chk("潮汐捕梦那一栏读得到", any("关于她的" in (m.get("body") or "") for m in d.get("memory", [])), str(d)[:150])
+c, d = req(base, "/api/memory?scope=me")
+chk("星河那一栏里没有她的（分家了）",
+    not any("关于她的" in (m.get("body") or "") for m in d.get("memory", [])), str(d)[:150])
+c, d = req(base, "/api/memory", {"scope": "her", "owner": "yume", "always": 1,
+                                       "title": "她", "body": "体检·关于她的·常在"})
+chk("关于她的记忆存得进", d.get("ok"), d)
+c, d = req(base, "/api/memory?scope=her")
+chk("潮汐捕梦那一栏读得到",
+    any("关于她的" in (m.get("body") or "") for m in d.get("memory", [])), str(d)[:150])
+c, d = req(base, "/api/memory?scope=me")
+chk("星河那一栏里没有她的（分家了）",
+    not any("关于她的" in (m.get("body") or "") for m in d.get("memory", [])), str(d)[:150])
 c, d = req(base, "/api/memory")
 lv = [m.get("layer") for m in d.get("memory", [])]
 chk("三层都在", set(lv) == {"anchor", "flow", "sink"}, lv)
@@ -436,7 +453,29 @@ chk("她的话和我回的话里都不许夹「今天是」",
     all(not x[1] for x in _p2 if x[0] != "system"), _p2)
 # 每条她的话旁边都跟着那份存下来的 ctx（原样重放用）
 _c = _sq.connect(os.path.join(tmp, "cove.db"))
-_ck = _c.execute("SELECT COUNT(*) FROM chat WHERE who='yume' AND ctx<>''").fetchone()[0]
+_ck = _c.execute("SELECT COUNT(*) FROM chat WHERE who=? AND ctx<>?", ("yume", "")).fetchone()[0]
+# 关于她"常在"的那条，得在稳的前缀里（不在前缀里就等于白记）
+_h = _c.execute("SELECT COUNT(*) FROM memory WHERE scope=? AND always=1", ("her",)).fetchone()[0]
+chk("关于她·常在 的条数读得到", _h >= 1, _h)
+_c.close()
+_code3 = ("import json, hub; ms = hub.build_messages(%s); "
+          "print(json.dumps(ms[0][chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116)], "
+          "ensure_ascii=False))" % json.dumps("体检"))
+_r4 = subprocess.run([sys.executable, "-c", _code3], cwd=tmp, capture_output=True, text=True)
+chk("「关于她·常在」进了最前面那条 system",
+    "关于她" in (_r4.stdout or ""), (_r4.returncode, (_r4.stdout or "")[:120]))
+_c = _sq.connect(os.path.join(tmp, "cove.db"))
+# 关于她"常在"的那条，得在稳的前缀里（不在前缀里就等于白记）
+_h = _c.execute("SELECT COUNT(*) FROM memory WHERE scope='her' AND always=1").fetchone()[0]
+chk("关于她·常在 的条数读得到", _h >= 1, _h)
+_code3 = ("import json, hub; ms = hub.build_messages(%s); "
+          "print(json.dumps(ms[0][\"content\"], ensure_ascii=False))"
+          % json.dumps("体检"))
+_r4 = subprocess.run([sys.executable, "-c", _code3], cwd=tmp, capture_output=True, text=True)
+chk("「关于她·常在」进了最前面那条 system",
+    "关于她" in (_r4.stdout or ""), (_r4.returncode, (_r4.stdout or "")[:120]))
+_c.close()
+_c = _sq.connect(os.path.join(tmp, "cove.db"))
 _c.close()
 chk("她说过的话里，有带 ctx 的", _ck > 0, _ck)
 _usr = [x for x in _pairs if x[0] == "user"]
